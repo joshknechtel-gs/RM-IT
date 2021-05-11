@@ -1,14 +1,17 @@
 '''
 Most of the CLO Optimizer Tools
-Use>> import CLOutils as clo
+within python use>> import CLOutils as clo
 function calls from notebook are then 
 e.g. clo.moodys_adjusted_warf 
+within excel the functions should be in 
+list of functions
 '''
 import numpy as np  
 import pandas as pd
 import datetime as dt
 #import blpapi
 #from xbbg import blp
+from pyxll import xl_func
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/'
 file = 'CLO17 portfolio as of 04.15.21.xlsm'
@@ -22,6 +25,7 @@ pot_trade_size=1e6
 ############################################################
 ### Key Constraints & Tests
 ############################################################
+@xl_func
 def moodys_adjusted_warf(df,moodys_score,moodys_rfTable):
     """
     This function creates the new Moody's Ratings Factor based 
@@ -41,6 +45,7 @@ def moodys_adjusted_warf(df,moodys_score,moodys_rfTable):
     df['Adj. WARF NEW'] = Adjusted_CFR_for_WARF.map(dict(moodys_rfTable[['Moody\'s Rating Factor Table','Unnamed: 10']].values))
     return df
 ################################################################
+@xl_func
 def sp_recovery_rate(model_df,lien,new_rr,bond_table):
     """
     This function get the S&P recovery rate as a percent. If it doesn't exist
@@ -78,6 +83,7 @@ def sp_recovery_rate(model_df,lien,new_rr,bond_table):
 
     return model_df
 ################################################################
+@xl_func
 def diversity_score(model_df, ind_avg_eu, weight_col='Par_no_default'):
     """
     This function calculates the Moody's Industry Diversity Score for the CLO
@@ -114,6 +120,7 @@ def diversity_score(model_df, ind_avg_eu, weight_col='Par_no_default'):
     dscore = df_merged['Industry\nDiversity\nScore'].sum()
     return dscore
 ################################################################
+@xl_func
 def weighted_average(model_df,cols):
     """
     Calculates the weighted average variable
@@ -132,26 +139,32 @@ def weighted_average(model_df,cols):
 # this were all based off Total, but should be PnD or PnD_postTrade 
 # former weight_col='Total', now 
 ################################################################
+@xl_func
 def percentage_C(model_df,weight_col='Par_no_default'):  
     perC = model_df.loc[model_df['Adjusted CFR for WARF'].str.match('C'),[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 ################################################################
+@xl_func
 def percentage_SecondLien(model_df,weight_col='Par_no_default'):  
     perC = model_df.loc[model_df['Lien Type']=='Second Lien',[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 ################################################################
+@xl_func
 def percentage_SubEighty(model_df,weight_col='Par_no_default'):  
     perC = model_df.loc[model_df['Blended Price']<80,[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 ################################################################
+@xl_func
 def percentage_SubNinety(model_df,weight_col='Par_no_default'):  
     perC = model_df.loc[model_df['Blended Price']<90,[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 ################################################################
+@xl_func
 def percentage_CovLite(model_df,weight_col='Par_no_default'):  
     perC = model_df.loc[model_df['Cov Lite']=='Yes',[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 ################################################################
+@xl_func
 def BAPP(model_df):
     model_df['Blended Actual Purchase Prices'] = \
         model_df[['Addtl Purchase Amt','Purch Price of Addtl Purch',
@@ -160,6 +173,7 @@ def BAPP(model_df):
     model_df.loc[model_df['Blended Actual Purchase Prices'].isna(),'Blended Actual Purchase Prices'] = 0
     return model_df
 ################################################################
+@xl_func
 def blended_price(model_df):
     model_df['Blended Price'] = model_df[['Potential Trades',
             'Addtl Purchase Amt','Blended Actual Purchase Prices','Total','Bid','Ask','Current Portfolio']].\
@@ -168,7 +182,8 @@ def blended_price(model_df):
     model_df.loc[model_df['Blended Price'].isna(),'Blended Price'] = 0
     return model_df
 ################################################################
-# this one seems inconsistent
+#
+@xl_func
 def par_build_loss(model_df,pot_trades='Potential Trades'):
     model_df['Par_Build_Loss_Sale'] = model_df[[pot_trades,
                                                     'Bid','Actual Purch Price of Current Positions']].\
@@ -178,6 +193,7 @@ def par_build_loss(model_df,pot_trades='Potential Trades'):
     model_df['Total_Par_Build_Loss'] = model_df[['Par_Build_Loss_Sale','Par_Build_Loss_Buy']].sum(axis=1)
     return model_df
 ################################################################
+@xl_func
 def par_burn_new(model_df,pot_trades='Potential Trades'):
     model_df['Par_Build_Loss_Sale'] = model_df[[pot_trades,
                                                     'Bid','Actual Purch Price of Current Positions']].\
@@ -187,6 +203,7 @@ def par_burn_new(model_df,pot_trades='Potential Trades'):
     model_df['Total_Par_Build_Loss'] = model_df[['Par_Build_Loss_Sale','Par_Build_Loss_Buy']].sum(axis=1)
     return model_df
 ################################################################
+@xl_func
 def mil_par_build_loss(model_df,pot_trade_size=1e6):
     """
     This function calculates the Par B/L Sale, Buy and Total for ALL
@@ -210,6 +227,7 @@ def mil_par_build_loss(model_df,pot_trade_size=1e6):
     model_df['Mil_Par_Build_Loss'] = model_df[['Mil_Par_BL_Sale','Mil_Par_BL_Buy']].sum(axis=1)
     return model_df
 ################################################################
+@xl_func
 def mil_parburn_new(model_df,pot_trade_size=1e6):
     """
     This function calculates the Par B/L Sale, Buy and Total for ALL
@@ -234,6 +252,7 @@ def mil_parburn_new(model_df,pot_trade_size=1e6):
     model_df['Mil_Par_Build_Loss'] = model_df[['Mil_Par_BL_Sale','Mil_Par_BL_Buy']].sum(axis=1)
     return model_df
 ################################################################
+@xl_func
 def mc_WARF(model_df,pot_trade_size=1e6):
     oldWARF = weighted_average(model_df,cols=['Par_no_default','Adj. WARF NEW'])
     
@@ -244,6 +263,7 @@ def mc_WARF(model_df,pot_trade_size=1e6):
 
     return model_df
 ################################################################
+@xl_func
 def mc_WAS(model_df,pot_trade_size=1000000):
     oldWARF = weighted_average(model_df,cols=['Par_no_default','Spread'])
   
@@ -254,6 +274,7 @@ def mc_WAS(model_df,pot_trade_size=1000000):
 
     return model_df
 ################################################################
+@xl_func
 def mc_WAPP(model_df,pot_trade_size=1000000):
     oldWARF = weighted_average(model_df,cols=['Par_no_default','Ask'])
 
@@ -263,6 +284,7 @@ def mc_WAPP(model_df,pot_trade_size=1000000):
         model_df.loc[row,'MC WAPP'] = weighted_average(div_df,cols=['Par_no_default','Ask']) - oldWARF
     return model_df
 ################################################################
+@xl_func
 def MC_diversity_score(model_df, ind_avg_eu, pot_trade_size=1000000):
     """
     This function calculates the Marginal Contribution Moody's Industry Diversity Score 
@@ -282,6 +304,7 @@ def MC_diversity_score(model_df, ind_avg_eu, pot_trade_size=1000000):
         model_df.loc[row,'MC Div Score'] = diversity_score(div_df, ind_avg_eu) - curr_DS
     return model_df
 ################################################################
+@xl_func
 def create_marginal_stats(model_df, ind_avg_eu, pot_trade_size=1e6):
     model_df = mil_parburn_new(model_df,pot_trade_size)
     model_df = mc_WARF(model_df,pot_trade_size)
@@ -292,6 +315,7 @@ def create_marginal_stats(model_df, ind_avg_eu, pot_trade_size=1e6):
 ################################################################
 ###  Main Port Stats Function
 ################################################################
+@xl_func
 def Port_stats(model_df, ind_avg_eu, weight_col='Par_no_default'):
     """
     Arg in:
@@ -429,6 +453,7 @@ def Port_stats(model_df, ind_avg_eu, weight_col='Par_no_default'):
     
     return Port_stats_df
 ################################################################
+@xl_func
 def comp_Port_stats(model_df, ind_avg_eu):
     
     
@@ -448,6 +473,7 @@ def comp_Port_stats(model_df, ind_avg_eu):
     
     return cstats
 ################################################################
+@xl_func
 def prepost_Port_stats(model_df, ind_avg_eu, cols):
     
     
@@ -462,6 +488,7 @@ def prepost_Port_stats(model_df, ind_avg_eu, cols):
     
     return cstats
 ################################################################
+@xl_func
 def replines(model_df):
     replines = model_df[model_df['Issuer'].str.match('zz_LXREP')]
     repline_stats_df = pd.DataFrame(np.nan,index=['Amount',
@@ -490,6 +517,7 @@ def replines(model_df):
 # by other bespoke solutions like direct APIs from the source,
 # also aides readability and debugging
 ################################################################
+@xl_func
 def get_master_df(filepath,sheet='MASTER'):
     master_df = pd.read_excel(filepath,sheet_name=sheet,header=1)
     master_df = master_df.loc[:,~master_df.columns.str.match("Unnamed")]
@@ -497,6 +525,7 @@ def get_master_df(filepath,sheet='MASTER'):
     master_df.set_index('LXID', inplace=True)
     return master_df
 ################################################################
+@xl_func
 def get_CLO_df(filepath,sheet='CLO 21 Port as of 3.18'):
     CLO_df = pd.read_excel(filepath,sheet_name=sheet,header=6,usecols='A:K')
     CLO_df.dropna(inplace=True)
@@ -512,17 +541,20 @@ def get_CLO_df(filepath,sheet='CLO 21 Port as of 3.18'):
     # CLO_df[['/Unit']].mean()    # verified for average /Unit
     return CLO_df
 ################################################################
+@xl_func
 def get_bidask_df(filepath,sheet='Bid.Ask 3.18'):
     bidask_df = pd.read_excel(filepath,sheet_name=sheet,header=0)
     bidask_df = bidask_df.loc[:,~bidask_df.columns.str.match("Unnamed")]
     bidask_df.set_index('LXID', inplace=True)
     return bidask_df
 ################################################################
+@xl_func
 def get_moodys_rating2rf_tables(filepath,sheet='New WARF'):
     moodys_score = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='E:F')
     moodys_rfTable = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='J:K')
     return moodys_score, moodys_rfTable
 ################################################################
+@xl_func
 def get_recovery_rate_tables(filepath,sheet='SP RR Updated'):
     new_sp_rr = pd.read_excel(filepath, sheet_name=sheet, header=1, usecols='L:M')
     new_sp_rr.dropna(how='all',inplace=True)
@@ -538,12 +570,14 @@ def get_recovery_rate_tables(filepath,sheet='SP RR Updated'):
     
     return new_sp_rr, lien_rr, bond_table
 ################################################################
+@xl_func
 def get_ind_avg_eu_table(filepath,sheet='Diversity'):
     global ind_avg_eu 
     ind_avg_eu = pd.read_excel(filepath, sheet_name=sheet, header=8, usecols='K:L')
     ind_avg_eu.dropna(how='all',inplace=True)
     return ind_avg_eu
 ################################################################
+@xl_func
 def get_pot_trades(filepath,sheet='Model Portfolio'):
     pot_trades = pd.read_excel(filepath,sheet_name=sheet,header=15,usecols='C:G')
     pot_trades.rename(columns={'LX ID':'LXID'},inplace=True)
@@ -551,6 +585,7 @@ def get_pot_trades(filepath,sheet='Model Portfolio'):
 
     return pot_trades
 ################################################################
+@xl_func
 def model_pricing(model_df):
     model_df.loc[model_df['Close Offer'].isna(),'Close Offer'] = 99
     #model_df.loc[model_df['Issuer'].str.match('zz_LXREP'),'Close Offer'] = 99.5
@@ -591,6 +626,7 @@ def model_pricing(model_df):
     
     return model_df
 ################################################################
+@xl_func
 def create_model_port_df(filepath):
     
     # first read in all relevant tables from the CLO model sprdsht
@@ -638,6 +674,7 @@ def create_model_port_df(filepath):
     
     return model_port, ind_avg_eu
 ##################################################################################
+@xl_func
 def desirability(model_df,keyStats,weights,highLow):
     def desire(model_df,keyStats,weights,highLow):
             return (((model_df[keyStats]-model_df[keyStats].mean())/model_df[keyStats].std())*\
@@ -645,6 +682,7 @@ def desirability(model_df,keyStats,weights,highLow):
     model_df['Desirability'] = desire(model_df,keyStats,weights,highLow)   
     return model_df
 ##################################################################################
+@xl_func
 def inside_outside(model_df,choicelist):
     condlist = [abs(model_df['Current Portfolio']) > 0,            
             abs(model_df['Potential Trades']) > 0]
@@ -657,6 +695,7 @@ def inside_outside(model_df,choicelist):
 ############ Working Prototype Optimizing Problems ###############################
 ##################################################################################
 
+@xl_func("dataframe, float, float: dataframe<index=True>", auto_resize=True)
 def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
 
     trade_size = 1e6  # can pass later or make dynamic
@@ -803,6 +842,7 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
     return new_port, curr_port #, sales, buys
 
 ##############################################################################################
+@xl_func
 def lower_WARF(model_df,target_WARF,Parburn_crit=0):
     
     trade_size = 1e6  # can pass later or make dynamic
@@ -959,6 +999,7 @@ def lower_WARF(model_df,target_WARF,Parburn_crit=0):
     return new_port, curr_port #, sales, buys
 
 ############################################################################################
+@xl_func
 def liquidity_metrics(model_df):
     """
     Poll the traders, Use daily high/low, etc
@@ -966,3 +1007,10 @@ def liquidity_metrics(model_df):
     model_df['Liquidity_Sale'] = 1
     model_df['Liquidity_Buy'] = 1
     return model_df
+
+@xl_func("dataframe<index=True>: dataframe<index=True>")
+def df_describe(df):
+    return df.describe()
+@xl_func("dataframe<index=True>: dataframe<index=True>")
+def df_info(df):
+    return df.info()
