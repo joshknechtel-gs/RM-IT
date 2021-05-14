@@ -84,17 +84,69 @@ def sp_recovery_rate(model_df,lien,new_rr,bond_table):
     return model_df
 ################################################################
 @xl_func
-def diversity_score(model_df, ind_avg_eu, weight_col='Par_no_default'):
+def diversity_score(model_df, weight_col='Par_no_default'):
     """
     This function calculates the Moody's Industry Diversity Score for the CLO
     
     Arg in:
         model_df: the input data frame (from the MASTER table d/l'd from BMS)
-        ind_avg_eu: Moody's discrete lookup table that maps AIEUS to IDS, need to be sorted
+        #ind_avg_eu: Moody's discrete lookup table that maps AIEUS to IDS, need to be sorted
     Arg out:
         dscore: the scalar measure of the IDS
     """
-    
+    # this is horribly slow to call each time
+    #ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
+    ind_avg_eu = pd.DataFrame([[ 0.    ,  0.    ], [ 0.05  ,  0.1   ], [ 0.15  ,  0.2   ],
+       [ 0.25  ,  0.3   ], [ 0.35  ,  0.4   ], [ 0.45  ,  0.5   ], [ 0.55  ,  0.6   ], 
+       [ 0.65  ,  0.7   ], [ 0.75  ,  0.8   ], [ 0.85  ,  0.9   ], [ 0.95  ,  1.    ],
+       [ 1.05  ,  1.05  ], [ 1.15  ,  1.1   ], [ 1.25  ,  1.15  ], [ 1.35  ,  1.2   ],
+       [ 1.45  ,  1.25  ], [ 1.55  ,  1.3   ], [ 1.65  ,  1.35  ], [ 1.75  ,  1.4   ],
+       [ 1.85  ,  1.45  ], [ 1.95  ,  1.5   ], [ 2.05  ,  1.55  ], [ 2.15  ,  1.6   ],
+       [ 2.25  ,  1.65  ], [ 2.35  ,  1.7   ], [ 2.45  ,  1.75  ], [ 2.55  ,  1.8   ],
+       [ 2.65  ,  1.85  ], [ 2.75  ,  1.9   ], [ 2.85  ,  1.95  ], [ 2.95  ,  2.    ],
+       [ 3.05  ,  2.0333], [ 3.15  ,  2.0667], [ 3.25  ,  2.1   ], [ 3.35  ,  2.1333],
+       [ 3.45  ,  2.1667], [ 3.55  ,  2.2   ], [ 3.65  ,  2.2333], [ 3.75  ,  2.2667],
+       [ 3.85  ,  2.3   ], [ 3.95  ,  2.3333], [ 4.05  ,  2.3667], [ 4.15  ,  2.4   ],
+       [ 4.25  ,  2.4333], [ 4.35  ,  2.4667], [ 4.45  ,  2.5   ], [ 4.55  ,  2.5333],
+       [ 4.65  ,  2.5667], [ 4.75  ,  2.6   ], [ 4.85  ,  2.6333], [ 4.95  ,  2.6667],
+       [ 5.05  ,  2.7   ], [ 5.15  ,  2.7333], [ 5.25  ,  2.7667], [ 5.35  ,  2.8   ],
+       [ 5.45  ,  2.8333], [ 5.55  ,  2.8667], [ 5.65  ,  2.9   ], [ 5.75  ,  2.9333],
+       [ 5.85  ,  2.9667], [ 5.95  ,  3.    ], [ 6.05  ,  3.025 ], [ 6.15  ,  3.05  ],
+       [ 6.25  ,  3.075 ], [ 6.35  ,  3.1   ], [ 6.45  ,  3.125 ], [ 6.55  ,  3.15  ],
+       [ 6.65  ,  3.175 ], [ 6.75  ,  3.2   ], [ 6.85  ,  3.225 ], [ 6.95  ,  3.25  ],
+       [ 7.05  ,  3.275 ], [ 7.15  ,  3.3   ], [ 7.25  ,  3.325 ], [ 7.35  ,  3.35  ],
+       [ 7.45  ,  3.375 ], [ 7.55  ,  3.4   ], [ 7.65  ,  3.425 ], [ 7.75  ,  3.45  ],
+       [ 7.85  ,  3.475 ], [ 7.95  ,  3.5   ], [ 8.05  ,  3.525 ], [ 8.15  ,  3.55  ],
+       [ 8.25  ,  3.575 ], [ 8.35  ,  3.6   ], [ 8.45  ,  3.625 ], [ 8.55  ,  3.65  ],
+       [ 8.65  ,  3.675 ], [ 8.75  ,  3.7   ], [ 8.85  ,  3.725 ], [ 8.95  ,  3.75  ],
+       [ 9.05  ,  3.775 ], [ 9.15  ,  3.8   ], [ 9.25  ,  3.825 ], [ 9.35  ,  3.85  ],
+       [ 9.45  ,  3.875 ], [ 9.55  ,  3.9   ], [ 9.65  ,  3.925 ], [ 9.75  ,  3.95  ],
+       [ 9.85  ,  3.975 ], [ 9.95  ,  4.    ], [10.05  ,  4.01  ], [10.15  ,  4.02  ],
+       [10.25  ,  4.03  ], [10.35  ,  4.04  ], [10.45  ,  4.05  ], [10.55  ,  4.06  ],
+       [10.65  ,  4.07  ], [10.75  ,  4.08  ], [10.85  ,  4.09  ], [10.95  ,  4.1   ],
+       [11.05  ,  4.11  ], [11.15  ,  4.12  ], [11.25  ,  4.13  ], [11.35  ,  4.14  ],
+       [11.45  ,  4.15  ], [11.55  ,  4.16  ], [11.65  ,  4.17  ], [11.75  ,  4.18  ],
+       [11.85  ,  4.19  ], [11.95  ,  4.2   ], [12.05  ,  4.21  ], [12.15  ,  4.22  ],
+       [12.25  ,  4.23  ], [12.35  ,  4.24  ], [12.45  ,  4.25  ], [12.55  ,  4.26  ],
+       [12.65  ,  4.27  ], [12.75  ,  4.28  ], [12.85  ,  4.29  ], [12.95  ,  4.3   ],
+       [13.05  ,  4.31  ], [13.15  ,  4.32  ], [13.25  ,  4.33  ], [13.35  ,  4.34  ],
+       [13.45  ,  4.35  ], [13.55  ,  4.36  ], [13.65  ,  4.37  ], [13.75  ,  4.38  ],
+       [13.85  ,  4.39  ], [13.95  ,  4.4   ], [14.05  ,  4.41  ], [14.15  ,  4.42  ],
+       [14.25  ,  4.43  ], [14.35  ,  4.44  ], [14.45  ,  4.45  ], [14.55  ,  4.46  ],
+       [14.65  ,  4.47  ], [14.75  ,  4.48  ], [14.85  ,  4.49  ], [14.95  ,  4.5   ],
+       [15.05  ,  4.51  ], [15.15  ,  4.52  ], [15.25  ,  4.53  ], [15.35  ,  4.54  ],
+       [15.45  ,  4.55  ], [15.55  ,  4.56  ], [15.65  ,  4.57  ], [15.75  ,  4.58  ],
+       [15.85  ,  4.59  ], [15.95  ,  4.6   ], [16.05  ,  4.61  ], [16.15  ,  4.62  ],
+       [16.25  ,  4.63  ], [16.35  ,  4.64  ], [16.45  ,  4.65  ], [16.55  ,  4.66  ],
+       [16.65  ,  4.67  ], [16.75  ,  4.68  ], [16.85  ,  4.69  ], [16.95  ,  4.7   ],
+       [17.05  ,  4.71  ], [17.15  ,  4.72  ], [17.25  ,  4.73  ], [17.35  ,  4.74  ],
+       [17.45  ,  4.75  ], [17.55  ,  4.76  ], [17.65  ,  4.77  ], [17.75  ,  4.78  ],
+       [17.85  ,  4.79  ], [17.95  ,  4.8   ], [18.05  ,  4.81  ], [18.15  ,  4.82  ],
+       [18.25  ,  4.83  ], [18.35  ,  4.84  ], [18.45  ,  4.85  ], [18.55  ,  4.86  ],
+       [18.65  ,  4.87  ], [18.75  ,  4.88  ], [18.85  ,  4.89  ], [18.95  ,  4.9   ],
+       [19.05  ,  4.91  ], [19.15  ,  4.92  ], [19.25  ,  4.93  ], [19.35  ,  4.94  ], [19.45  ,  4.95  ],
+       [19.55  ,  4.96  ], [19.65  ,  4.97  ], [19.75  ,  4.98  ], [19.85  ,  4.99  ], [19.95  ,  5.    ]], 
+                              columns = ['Aggregate\nIndustry\nEquivalent\nUnit Score', 'Industry\nDiversity\nScore'])    
     #first create the Par amount filtering out defaults
     #model_df['Par_no_default'] = model_df['Total']
     #model_df.loc[model_df['Default']=='Y','Par_no_default'] = 0
@@ -169,7 +221,7 @@ def BAPP(model_df):
     model_df['Blended Actual Purchase Prices'] = \
         model_df[['Addtl Purchase Amt','Purch Price of Addtl Purch',
                     'Current Portfolio','Actual Purch Price of Current Positions']].\
-        apply(lambda x: 100*((x[0]*x[1]/100)+(x[2]*x[3]/100))/(x[0]+x[2]),axis=1)
+        apply(lambda x: 100*((x[0]*x[1]/100)+(x[2]*x[3]/100))/(x[0]+x[2]),axis=1) #I get runtime warnings often
     model_df.loc[model_df['Blended Actual Purchase Prices'].isna(),'Blended Actual Purchase Prices'] = 0
     return model_df
 ################################################################
@@ -178,7 +230,7 @@ def blended_price(model_df):
     model_df['Blended Price'] = model_df[['Potential Trades',
             'Addtl Purchase Amt','Blended Actual Purchase Prices','Total','Bid','Ask','Current Portfolio']].\
             apply(lambda x: ((x[0]*x[4]/100+(x[6]+x[1])*x[2])/x[3])*100 if x[0]<1 else \
-                            ((x[0]*x[5]/100+(x[6]+x[1])*x[2])/x[3])*100,axis=1 )
+                            ((x[0]*x[5]/100+(x[6]+x[1])*x[2])/x[3])*100,axis=1 )  #I get runtime warnings often
     model_df.loc[model_df['Blended Price'].isna(),'Blended Price'] = 0
     return model_df
 ################################################################
@@ -285,42 +337,42 @@ def mc_WAPP(model_df,pot_trade_size=1000000):
     return model_df
 ################################################################
 @xl_func
-def MC_diversity_score(model_df, ind_avg_eu, pot_trade_size=1000000):
+def MC_diversity_score(model_df, pot_trade_size=1000000):
     """
     This function calculates the Marginal Contribution Moody's Industry Diversity Score 
     for all loan given a potential trade size (default 1mn)
     
     Arg in:
         model_df: the input data frame (from the MASTER table d/l'd from BMS)
-        ind_avg_eu: Moody's discrete lookup table that maps AIEUS to IDS, need to be sorted
+        #ind_avg_eu: Moody's discrete lookup table that maps AIEUS to IDS, need to be sorted
         pot_trade_size
     Arg out:
         model_df: with added MC Div Score field
     """
-    curr_DS = diversity_score(model_df, ind_avg_eu)
+    curr_DS = diversity_score(model_df)
     for row in model_df.index:
         div_df = model_df[['Parent Company','Moodys Industry','Par_no_default']].copy()    
         div_df.loc[row,'Par_no_default'] += pot_trade_size
-        model_df.loc[row,'MC Div Score'] = diversity_score(div_df, ind_avg_eu) - curr_DS
+        model_df.loc[row,'MC Div Score'] = diversity_score(div_df) - curr_DS
     return model_df
 ################################################################
 @xl_func
-def create_marginal_stats(model_df, ind_avg_eu, pot_trade_size=1e6):
+def create_marginal_stats(model_df, pot_trade_size=1e6):
     model_df = mil_parburn_new(model_df,pot_trade_size)
     model_df = mc_WARF(model_df,pot_trade_size)
-    model_df = MC_diversity_score(model_df, ind_avg_eu, pot_trade_size)
+    model_df = MC_diversity_score(model_df, pot_trade_size)
     model_df = mc_WAS(model_df,pot_trade_size)
     model_df = mc_WAPP(model_df,pot_trade_size)
     return model_df
 ################################################################
 ###  Main Port Stats Function
 ################################################################
-@xl_func
-def Port_stats(model_df, ind_avg_eu, weight_col='Par_no_default'):
+@xl_func("dataframe<index=True>, str: dataframe<index=True>", auto_resize=True)
+def Port_stats(model_df, weight_col='Par_no_default'):
     """
     Arg in:
         model_df
-        ind_avg_eu: table (df) Moody's discrete lookup table that maps AIEUS to IDS
+        #ind_avg_eu: table (df) Moody's discrete lookup table that maps AIEUS to IDS
     
     - Estimated Libor
     - Minimum Floating Spread Test - Without Libor Floors
@@ -394,7 +446,7 @@ def Port_stats(model_df, ind_avg_eu, weight_col='Par_no_default'):
     Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'] = \
         Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'].apply('{:.1f}%'.format)
     
-    Port_stats_df.loc['Moodys Diversity Test','Portfolio Stats'] = diversity_score(model_df, ind_avg_eu, weight_col)
+    Port_stats_df.loc['Moodys Diversity Test','Portfolio Stats'] = diversity_score(model_df, weight_col)
     Port_stats_df.loc['Moodys Diversity Test'] = \
         Port_stats_df.loc['Moodys Diversity Test'].apply('{:.0f}'.format)
     
@@ -454,18 +506,18 @@ def Port_stats(model_df, ind_avg_eu, weight_col='Par_no_default'):
     return Port_stats_df
 ################################################################
 @xl_func
-def comp_Port_stats(model_df, ind_avg_eu):
+def comp_Port_stats(model_df):
     
     
     mask = abs(model_df['Current Portfolio']) > 0
-    cstats = Port_stats(model_df.loc[mask],ind_avg_eu, 'Now')
+    cstats = Port_stats(model_df.loc[mask], 'Now')
     cstats.rename(columns={'Portfolio Stats':'Current Portfolio'},inplace=True)
 
     mask = abs(model_df['Potential Trades']) > 0
-    pstats = Port_stats(model_df.loc[mask],ind_avg_eu, 'Potential Trades')
+    pstats = Port_stats(model_df.loc[mask], 'Potential Trades')
     pstats.rename(columns={'Portfolio Stats':'Potential Trades (incl Replines)'},inplace=True)
     
-    tstats = Port_stats(model_df,ind_avg_eu, 'Total')
+    tstats = Port_stats(model_df, 'Total')
     tstats.rename(columns={'Portfolio Stats':'Total Portfolio (incl Trades)'},inplace=True)
     
     cstats = cstats.join(pstats)
@@ -473,15 +525,15 @@ def comp_Port_stats(model_df, ind_avg_eu):
     
     return cstats
 ################################################################
-@xl_func
-def prepost_Port_stats(model_df, ind_avg_eu, cols):
+@xl_func("dataframe<index=True>,str[] array: dataframe<index=True>", auto_resize = True)
+def prepost_Port_stats(model_df, cols):
     
     
     mask = abs(model_df['Current Portfolio']) > 0
-    cstats = Port_stats(model_df.loc[mask],ind_avg_eu, cols[0])
+    cstats = Port_stats(model_df.loc[mask], cols[0])
     cstats.rename(columns={'Portfolio Stats':'Current Portfolio (pre-trade)'},inplace=True)
 
-    tstats = Port_stats(model_df,ind_avg_eu,  cols[1])
+    tstats = Port_stats(model_df,  cols[1])
     tstats.rename(columns={'Portfolio Stats':'Post-trade Portfolio'},inplace=True)
     
     cstats = cstats.join(tstats)
@@ -570,9 +622,8 @@ def get_recovery_rate_tables(filepath,sheet='SP RR Updated'):
     
     return new_sp_rr, lien_rr, bond_table
 ################################################################
-@xl_func("str, str: dataframe<index=True>",auto_resize=True)
+@xl_func("str, str: object",auto_resize=True)
 def get_ind_avg_eu_table(filepath,sheet='Diversity'):
-    #global ind_avg_eu 
     ind_avg_eu = pd.read_excel(filepath, sheet_name=sheet, header=8, usecols='K:L')
     ind_avg_eu.dropna(how='all',inplace=True)
     return ind_avg_eu
@@ -626,8 +677,9 @@ def model_pricing(model_df):
     
     return model_df
 ################################################################
-#@xl_func("str: object")   #dataframe<index=True>",auto_resize=True
-@xl_func("str: dataframe<index=True>",auto_resize=True)
+
+#@xl_func("str: dataframe<index=True>",auto_resize=True)
+@xl_func("str: object")
 def create_model_port_df(filepath):
     
     # first read in all relevant tables from the CLO model sprdsht
@@ -636,7 +688,7 @@ def create_model_port_df(filepath):
     bidask_df = get_bidask_df(filepath,sheet=Bid_tab)
     moodys_score, moodys_rfTable = get_moodys_rating2rf_tables(filepath,sheet='New WARF')
     new_sp_rr, lien_rr, bond_table = get_recovery_rate_tables(filepath,sheet='SP RR Updated')
-    ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
+    #ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
     pot_trades = get_pot_trades(filepath,sheet='Model Portfolio')
     
       
@@ -670,12 +722,19 @@ def create_model_port_df(filepath):
     #model_port['Curr_Ind'] = model_port['Current Portfolio'] > 0
     
     # nil out any tiny positions as they typically don't have full data elsewhere
-    # and cause errors
-    model_port.loc[(model_port['Current Portfolio']>0)&(model_port['Current Portfolio']<1000),['Current Portfolio']] = 0
+    # and cause errors, e.g. LX189862 which has 0.03
+    model_port = model_port.loc[~((model_port['Current Portfolio']>0)&(model_port['Current Portfolio']<1000))]
+      
+    #drop the REP Lines
+    model_port = model_port.drop(model_port[model_port['Issuer'].str.match('zz_LXREP')].index)
     
-    return model_port#, ind_avg_eu
+    # new, create the marginal stats in main call, same with inside and outside
+    model_port = create_marginal_stats(model_port)
+    model_port = inside_outside(model_port,['Current', 'Potential'])
+        
+    return model_port
 ##################################################################################
-@xl_func
+@xl_func("dataframe<index=True>,str[] array, float[] array, float[] array: object")
 def desirability(model_df,keyStats,weights,highLow):
     def desire(model_df,keyStats,weights,highLow):
             return (((model_df[keyStats]-model_df[keyStats].mean())/model_df[keyStats].std())*\
@@ -696,7 +755,7 @@ def inside_outside(model_df,choicelist):
 ############ Working Prototype Optimizing Problems ###############################
 ##################################################################################
 
-@xl_func("dataframe, float, float: dataframe<index=True>", auto_resize=True)
+@xl_func("dataframe<index=True>, float, float: object", auto_resize=True)
 def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
     """
     model_df: dataframe object
@@ -705,15 +764,16 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
     """
     trade_size = 1e6  # can pass later or make dynamic
     
-#    model_df.drop(columns='Trade',inplace=True)  # need to clear any previous queries
-
+    if model_df.columns.str.match('Trade').any():
+        model_df.drop(columns='Trade',inplace=True)  # need to clear any previous queries
+    print("DF: ",type(model_df)," WAS: ",type(WAS_lift)," Parburn: ",type(Parburn_crit))
     ####### Starting Key Stats ####################
     # Let's keep track of pre-trade key stats to compare
     # These should match the pstats from 'Current Portfolio'
     pre_WAS = weighted_average(model_df,cols=['Par_no_default','Spread'])
     target_WAS = pre_WAS + WAS_lift
     pre_WARF = weighted_average(model_df,cols=['Par_no_default','Adj. WARF NEW'])
-    pre_dScore = diversity_score(model_df,ind_avg_eu,'Par_no_default')
+    pre_dScore = diversity_score(model_df,'Par_no_default')
     print('Pre Trade Stats, WAS: ',pre_WAS,' Target WAS: ',target_WAS,' WARF: ', pre_WARF,' DivScore: ', pre_dScore)
 
     ####### Potential Trade list ####################
@@ -732,7 +792,7 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
     sales_value = model_df.loc[(model_df['Categorical']=='Current')&\
                             (model_df['Spread']<pre_WAS)&(model_df['Adj. WARF NEW']>3200),'Current Portfolio'].sum()
     buys_value = num_buys*trade_size
-    print('# Sales: ',num_sales,' $amt: ', sales_value, ' # Buys: ', num_buys, " $amt: ", buys_value)
+    #print('# Sales: ',num_sales,' $amt: ', sales_value, ' # Buys: ', num_buys, " $amt: ", buys_value)
 
     ####### Initial Conditions ####################
     curr_port = model_df.loc[(model_df['Categorical']=='Current')].index.tolist()
@@ -768,15 +828,15 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
        
         
         parburn_trades = parburn_sale + parburn_buy
-        print("Trade Set #",trades+1)
+        #print("Trade Set #",trades+1)
         parburn += parburn_sale
-        print(pot_sales[trades],parburn)
+        #print(pot_sales[trades],parburn)
         # can't use this because the sales isn't sized the same, need to calc actual parburn
         parburn += parburn_buy
-        print(pot_buys[trades],parburn)
+        #print(pot_buys[trades],parburn)
         
         if (parburn <= -Parburn_crit):
-            print(parburn, post_WAS)
+            #print(parburn, post_WAS)
             break
         else:
             # need to make cash neutral trades
@@ -813,7 +873,7 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
                 #    model_df.loc[pot_sales[trades],'Par_no_default'] - sell_size 
                 #model_df.loc[pot_sales[trades],'Trade'] = 'Sale'
                 #new_port.remove(pot_sales[trades]) 
-            print("Trade Balance: ",trade_bal)
+            #print("Trade Balance: ",trade_bal)
 
             # on the last trade we need to balance out the trade_bal
             if (trade_bal < 0): #(trades == num_trades -1) & 
@@ -822,7 +882,7 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
                 trade_bal += trade_bal
                 buys += 1
             elif (trade_bal > 0):
-                print('Trying to sell more ',pot_sales[sells], ' Sells #',sells)
+                #print('Trying to sell more ',pot_sales[sells], ' Sells #',sells)
                 while (model_df.loc[pot_sales[sells],'PnD_postTrade'] <1)&(sells <= len(pot_sales)-1):
                     sells +=1
                 model_df.loc[pot_sales[sells],'PnD_postTrade'] -= \
@@ -831,28 +891,29 @@ def raise_WAS(model_df,WAS_lift=0.0005,Parburn_crit=2e6):
                 sells += 1
 
             post_WAS = weighted_average(model_df.loc[new_port],cols=['PnD_postTrade','Spread'])
-            post_dScore = diversity_score(model_df,ind_avg_eu,'PnD_postTrade')
+            post_dScore = diversity_score(model_df,'PnD_postTrade')
             post_WARF = weighted_average(model_df,cols=['PnD_postTrade','Adj. WARF NEW'])
             
-            print('Sale: ',pot_sales[trades],' Buy: ', pot_buys[trades])
-            print('Post Stats, WAS: ',post_WAS,' WARF: ', post_WARF,' DivScore: ', post_dScore)
+            #print('Sale: ',pot_sales[trades],' Buy: ', pot_buys[trades])
+            #print('Post Stats, WAS: ',post_WAS,' WARF: ', post_WARF,' DivScore: ', post_dScore)
             trades += 1
             
             if (post_WAS >= target_WAS)|(post_dScore <= 50):
-                print('Target met: ',(post_WAS >= target_WAS),' or Diversity breached: ', (post_dScore <= 50))
-                print('Total Par Burn: ',parburn,'', post_WAS, post_dScore)
+                #print('Target met: ',(post_WAS >= target_WAS),' or Diversity breached: ', (post_dScore <= 50))
+                #print('Total Par Burn: ',parburn,'', post_WAS, post_dScore)
                 break
             
         
-    return new_port, curr_port #, sales, buys
+    return model_df #new_port #, curr_port #, sales, buys
 
 ##############################################################################################
-@xl_func
+@xl_func("dataframe<index=True>, float, float: object", auto_resize=True)
 def lower_WARF(model_df,target_WARF,Parburn_crit=0):
     
     trade_size = 1e6  # can pass later or make dynamic
     
-    model_df.drop(columns='Trade',inplace=True)  # need to clear any previous queries
+    if model_df.columns.str.match('Trade').any():
+        model_df.drop(columns='Trade',inplace=True)  # need to clear any previous queries
     
     ####### Starting Key Stats ####################
     # Let's keep track of pre-trade key stats to compare
@@ -861,7 +922,7 @@ def lower_WARF(model_df,target_WARF,Parburn_crit=0):
     
     pre_WARF = weighted_average(model_df,cols=['Par_no_default','Adj. WARF NEW'])
 
-    pre_dScore = diversity_score(model_df,ind_avg_eu,'Par_no_default')
+    pre_dScore = diversity_score(model_df,'Par_no_default')
     print('Pre Trade Stats, WARF: ',pre_WARF,' Target WARF: ',target_WARF,' WAS: ', pre_WAS,' DivScore: ', pre_dScore)
 
     ####### Potential Trade list ####################
@@ -984,7 +1045,7 @@ def lower_WARF(model_df,target_WARF,Parburn_crit=0):
                 sells += 1
                                     
             post_WAS = weighted_average(model_df.loc[new_port],cols=['PnD_postTrade','Spread'])
-            post_dScore = diversity_score(model_df,ind_avg_eu,'PnD_postTrade')
+            post_dScore = diversity_score(model_df,'PnD_postTrade')
             post_WARF = weighted_average(model_df,cols=['PnD_postTrade','Adj. WARF NEW'])
             
             print('Sale: ',pot_sales[trades],' Buy: ', pot_buys[trades])
@@ -1001,7 +1062,13 @@ def lower_WARF(model_df,target_WARF,Parburn_crit=0):
     #elif trade_bal < 0:
                 
         
-    return new_port, curr_port #, sales, buys
+    return model_df #new_port, curr_port #, sales, buys
+###########################################################################################
+@xl_func("dataframe<index=True>: dataframe<index=True>", auto_resize=True)
+def show_tradelist(model_df):
+    return (model_df.loc[~model_df['Trade'].isna(),['Parent Company','Trade','Par_no_default',
+                                             'PnD_postTrade','Spread','Adj. WARF NEW','S&P Recovery Rate (AAA)',
+                                             'Desirability']]).sort_values(by=['Trade','Desirability'])
 
 ############################################################################################
 @xl_func
@@ -1016,14 +1083,8 @@ def liquidity_metrics(model_df):
 @xl_func("dataframe<index=True>: dataframe<index=True>",auto_resize=True)
 def df_describe(df):
     return df.describe()
-
-@xl_func("dataframe<index=True>: dataframe<index=True>",auto_resize=True)
-def df_info(df):
-    return df.info()
-
-@xl_func("str, str: object")
-def get_ind_avg_eu_test(filepath,sheet='Diversity'):
-    #global ind_avg_eu 
-    ind_avg_eu = pd.read_excel(filepath, sheet_name=sheet, header=8, usecols='K:L')
-    ind_avg_eu.dropna(how='all',inplace=True)
-    return ind_avg_eu
+############################################################################################
+@xl_func #("dataframe<index=True>: ",auto_resize=True)
+def df_type(df):
+    print("Type: ",type(df))
+    return type(df)
