@@ -94,8 +94,14 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     Arg out:
         dscore: the scalar measure of the IDS
     """
-    # this is horribly slow to call each time
-    #ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
+    # calling this each time time (like in MC Diversity)
+    # makes the function unbearably slow. I tried setting it
+    # as a global variable but that didn't solve the issue
+    # I need to look into a solution to set something up 
+    # permanently in memory after the first call (though global would do it)
+    # ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
+    # thus I've hard-coded it, but if this ever changes from Moody's
+    # we need to update here.
     ind_avg_eu = pd.DataFrame([[ 0.    ,  0.    ], [ 0.05  ,  0.1   ], [ 0.15  ,  0.2   ],
        [ 0.25  ,  0.3   ], [ 0.35  ,  0.4   ], [ 0.45  ,  0.5   ], [ 0.55  ,  0.6   ], 
        [ 0.65  ,  0.7   ], [ 0.75  ,  0.8   ], [ 0.85  ,  0.9   ], [ 0.95  ,  1.    ],
