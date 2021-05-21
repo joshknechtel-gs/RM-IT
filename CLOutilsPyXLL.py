@@ -408,8 +408,9 @@ def Port_stats(model_df, weight_col='Par_no_default'):
     #    'Pot Par B/L Buy',
     #    'Pot Par B/L Total',
         'Total Portfolio Par (excl. Defaults)',
-        'Total Portfolio Par',
-        'Current Portfolio'],columns = ['Portfolio Stats'])
+    #    'Total Portfolio Par',
+     #   'Current Portfolio'
+                                              ],columns = ['Portfolio Stats'])
 
     # Par_no_default works for current positions only
     # if trying to compare potential new trades, need updated field
@@ -494,14 +495,14 @@ def Port_stats(model_df, weight_col='Par_no_default'):
         Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
 
     
-    Port_stats_df.loc['Total Portfolio Par','Portfolio Stats'] = model_df['Total'].sum()
-    Port_stats_df.loc['Total Portfolio Par'] = \
-        Port_stats_df.loc['Total Portfolio Par'].apply('{:,.0f}'.format)
+#    Port_stats_df.loc['Total Portfolio Par','Portfolio Stats'] = model_df['Total'].sum()
+#    Port_stats_df.loc['Total Portfolio Par'] = \
+#        Port_stats_df.loc['Total Portfolio Par'].apply('{:,.0f}'.format)
     
     # current portfolio is Quantity + Add'l Amount (manual) TBA later
-    Port_stats_df.loc['Current Portfolio','Portfolio Stats'] = model_df[['Addtl Purchase Amt','Current Portfolio']].sum(axis=1).sum()
-    Port_stats_df.loc['Current Portfolio'] = \
-        Port_stats_df.loc['Current Portfolio'].apply('{:,.0f}'.format)
+#    Port_stats_df.loc['Current Portfolio','Portfolio Stats'] = model_df[['Addtl Purchase Amt','Current Portfolio']].sum(axis=1).sum()
+#    Port_stats_df.loc['Current Portfolio'] = \
+#        Port_stats_df.loc['Current Portfolio'].apply('{:,.0f}'.format)
     
     return Port_stats_df
 ################################################################
