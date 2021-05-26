@@ -96,9 +96,9 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     """
     # calling this each time time (like in MC Diversity)
     # makes the function unbearably slow. I tried setting it
-    # as a global variable but that didn't solve the issue
+    # as a global variable but that didn't solve the issue.
     # I need to look into a solution to set something up 
-    # permanently in memory after the first call (though global would do it)
+    # permanently in memory after the first call (thought global would do it)
     # ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
     # thus I've hard-coded it, but if this ever changes from Moody's
     # we need to update here.
@@ -362,7 +362,7 @@ def MC_diversity_score(model_df, pot_trade_size=1000000):
         model_df.loc[row,'MC Div Score'] = diversity_score(div_df) - curr_DS
     return model_df
 ################################################################
-@xl_func
+@xl_func("dataframe<index=True>, float: object", auto_resize=True)
 def create_marginal_stats(model_df, pot_trade_size=1e6):
     model_df = mil_parburn_new(model_df,pot_trade_size)
     model_df = mc_WARF(model_df,pot_trade_size)
@@ -578,7 +578,7 @@ def replines(model_df):
 ################################################################
 @xl_func
 def get_master_df(filepath,sheet='MASTER'):
-    master_df = pd.read_excel(filepath,sheet_name=sheet,header=1)
+    master_df = pd.read_excel(filepath,sheet_name=sheet,header=1,engine='openpyxl')
     master_df = master_df.loc[:,~master_df.columns.str.match("Unnamed")]
     master_df.rename(columns={'LoanX ID':'LXID'},inplace=True)
     master_df.set_index('LXID', inplace=True)
@@ -586,7 +586,7 @@ def get_master_df(filepath,sheet='MASTER'):
 ################################################################
 @xl_func
 def get_CLO_df(filepath,sheet='CLO 21 Port as of 3.18'):
-    CLO_df = pd.read_excel(filepath,sheet_name=sheet,header=6,usecols='A:K')
+    CLO_df = pd.read_excel(filepath,sheet_name=sheet,header=6,usecols='A:K',engine='openpyxl')
     CLO_df.dropna(inplace=True)
     CLO_df.rename(columns={'Cusip or LIN':'LXID'},inplace=True)
     CLO_df.set_index('LXID', inplace=True)
@@ -602,23 +602,23 @@ def get_CLO_df(filepath,sheet='CLO 21 Port as of 3.18'):
 ################################################################
 @xl_func
 def get_bidask_df(filepath,sheet='Bid.Ask 3.18'):
-    bidask_df = pd.read_excel(filepath,sheet_name=sheet,header=0)
+    bidask_df = pd.read_excel(filepath,sheet_name=sheet,header=0,engine='openpyxl')
     bidask_df = bidask_df.loc[:,~bidask_df.columns.str.match("Unnamed")]
     bidask_df.set_index('LXID', inplace=True)
     return bidask_df
 ################################################################
 @xl_func
 def get_moodys_rating2rf_tables(filepath,sheet='New WARF'):
-    moodys_score = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='E:F')
-    moodys_rfTable = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='J:K')
+    moodys_score = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='E:F',engine='openpyxl')
+    moodys_rfTable = pd.read_excel(filepath,sheet_name=sheet,header=0,usecols='J:K',engine='openpyxl')
     return moodys_score, moodys_rfTable
 ################################################################
 @xl_func
 def get_recovery_rate_tables(filepath,sheet='SP RR Updated'):
-    new_sp_rr = pd.read_excel(filepath, sheet_name=sheet, header=1, usecols='L:M')
+    new_sp_rr = pd.read_excel(filepath, sheet_name=sheet, header=1, usecols='L:M',engine='openpyxl')
     new_sp_rr.dropna(how='all',inplace=True)
 
-    lien_rr = pd.read_excel(filepath, sheet_name=sheet, header=1, usecols='A:I')
+    lien_rr = pd.read_excel(filepath, sheet_name=sheet, header=1, usecols='A:I',engine='openpyxl')
     lien_rr.dropna(how='all',inplace=True)
 
     bond_split = lien_rr[lien_rr['Country.1']=='Bonds'].index.values[0]
@@ -631,13 +631,13 @@ def get_recovery_rate_tables(filepath,sheet='SP RR Updated'):
 ################################################################
 @xl_func("str, str: object",auto_resize=True)
 def get_ind_avg_eu_table(filepath,sheet='Diversity'):
-    ind_avg_eu = pd.read_excel(filepath, sheet_name=sheet, header=8, usecols='K:L')
+    ind_avg_eu = pd.read_excel(filepath, sheet_name=sheet, header=8, usecols='K:L',engine='openpyxl')
     ind_avg_eu.dropna(how='all',inplace=True)
     return ind_avg_eu
 ################################################################
 @xl_func
 def get_pot_trades(filepath,sheet='Model Portfolio'):
-    pot_trades = pd.read_excel(filepath,sheet_name=sheet,header=15,usecols='C:G')
+    pot_trades = pd.read_excel(filepath,sheet_name=sheet,header=15,usecols='C:G',engine='openpyxl')
     pot_trades.rename(columns={'LX ID':'LXID'},inplace=True)
     pot_trades.set_index('LXID', inplace=True)
 
@@ -731,15 +731,27 @@ def create_model_port_df(filepath):
     # nil out any tiny positions as they typically don't have full data elsewhere
     # and cause errors, e.g. LX189862 which has 0.03
     model_port = model_port.loc[~((model_port['Current Portfolio']>0)&(model_port['Current Portfolio']<1000))]
-      
-    #drop the REP Lines
-    model_port = model_port.drop(model_port[model_port['Issuer'].str.match('zz_LXREP')].index)
-    
+
+    model_port.dropna(how='all',inplace=True)
     # new, create the marginal stats in main call, same with inside and outside
     model_port = create_marginal_stats(model_port)
     model_port = inside_outside(model_port,['Current', 'Potential'])
+
+    #drop the REP Lines
+    try:
+        model_port = model_port.drop(model_port[model_port['Issuer'].str.match('zz_LXREP')].index)
+    finally:
+        print("skipped the zz_LXREP line drops")
         
     return model_port
+##################################################################################
+@xl_func("dataframe<index=True>: object")
+def drop_replines(model_df):
+    try:
+        model_df = model_df.drop(model_df[model_df['Issuer'].str.match('zz_LXREP')].index)
+    finally:
+        print("skipped the zz_LXREP line drops")
+    return model_df
 ##################################################################################
 @xl_func("dataframe<index=True>,str[] array, float[] array, float[] array: object")
 def desirability(model_df,keyStats,weights,highLow):
@@ -1095,3 +1107,140 @@ def df_describe(df):
 def df_type(df):
     print("Type: ",type(df))
     return type(df)
+############################################################################################
+@xl_func("dataframe<index=True>,str[] array, float[] array, float[] array: object")
+def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"):  #,targets
+    """
+    This uses the PuLP optimizer whose objective is to try to maximize 
+    desirability given a set of constraints. You control which stats you
+    want to maximize (e.g. WAS, (-)WARF, etc) by choosing higher weights
+    in the desirability for the specified stat(s)
+    
+    Args in:
+        model_df: dataframe or object creating with the universe ands stats
+        keyStats: the stats which will be used in desirability and constraints
+        weights: weights in desirability
+        highLow: specifies whether the higher stat is good (e.g WAS) or low is good (e.g. WARF)
+        contraints: Constraints for the keyStats
+        targets: (future use)
+        Cash_to_Spend: if there is cash to spend or raise (-) then specify
+        probName: to name the problem to refer to the .lp later
+    Args out:
+        model_df: NewPort, CashDelta, Trade columns added with the solution if feasible
+    
+    """
+    
+    # from constraintDict we should build the constraints
+    # the intention is that this dict will be built from
+    # user determined constraints and weighting of the
+    # objective
+    
+    # this would be better as a dictionary in case the sheet changes order
+    Cash_to_Spend = otherConstraints[0]
+    PBLim = otherConstraints[1]
+    upperTradable = otherConstraints[2]
+    
+    WARFTest = keyConstraints[1]
+    WARFcp = currStats[2]
+    WARFdelta = WARFTest - WARFcp
+    RecoveryTest = keyConstraints[4]
+    RRcp = currStats[5]
+    RRdelta = RecoveryTest - RRcp
+    DiversityTest = -1
+
+
+    # Create the 'prob' variable to contain the problem data
+    prob = LpProblem(probName,LpMaximize)   # <- Max attractiveness, could be just Spread
+
+    # Creates a list of the Features to use in problem
+    Trades = model_port.index
+    Trades = Trades.unique()  # need to combine stats for these
+
+    # A dictionary of the attractiveness of each of the Loans is created
+    attractiveness = dict(zip(model_df['Desirability'].index,model_df['Desirability'].values))
+
+    # A dictionary of the Rating Factor in each of the Loans is created
+    WARF = dict(zip(model_df['Adj. WARF NEW'].index,model_df['Adj. WARF NEW'].values))
+
+    # A dictionary of the Recovery Rate in each of the Loans is created
+    WARR = dict(zip(model_df['S&P Recovery Rate (AAA)'].index,model_df['S&P Recovery Rate (AAA)'].values)) #,'MC Div Score'
+
+    # A dictionary of the current port positions in each of the Loans is created
+    CP = dict(zip(model_df['Current Portfolio'].index,model_df['Current Portfolio'].values)) #,'CP'
+    #Ask = dict(model_port['Ask'])
+    Bid = dict(zip(model_df['Bid'].index,model_df['Bid'].values))
+    #APP = dict(model_port['Blended Actual Purchase Prices'])
+
+    # A dictionary of the fibre percent in each of the Loans is created
+    mcDiversity = dict(zip(model_df['MC Div Score'].index,model_df['MC Div Score'].values)) 
+
+    # This limit the sells to the amount in current portfolio and up to amt tradeable
+    # I need the -cp_i <= t_i <= trade_size_limit (i.e 4e6)
+    trades = [LpVariable(format(i), lowBound = -CP[i],  upBound = upperTradable) for i in Trades]
+
+    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable
+    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i
+
+    # The objective function is added to 'prob' first
+    prob += lpSum([attractiveness[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
+
+    # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
+    prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding"
+    # I think this needs to be Bid for CP and Ask for loan
+    prob += lpSum([((100-Bid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
+    # still kind of weird that this is needed, must be in corner solution
+    prob += lpSum([((1+(100-Bid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
+
+    # then the Test Condition Hard constriants, WARF,RR, Div, etc
+    prob += lpSum([WARF[i] * t for t, i in zip(trades,Trades)]) <= WARFdelta, "WARF Test"
+    prob += lpSum([WARR[i] * t for t, i in zip(trades,Trades)]) >= RRdelta, "Recovery Test"
+    # need to 
+    prob += lpSum([mcDiversity[i] * t for t, i in zip(trades,Trades)]) >= DiversityTest, "Diversity Test (simplified)"
+
+    # The problem data is written to an .lp file
+    prob.writeLP(probName+".lp")
+
+    # The problem is solved using PuLP's choice of Solver
+    prob.solve()
+
+    # The status of the solution is printed to the screen
+    print("Status:", LpStatus[prob.status])
+
+    # Each of the variables is printed with it's resolved optimum value
+    # so this would be new portfolio and new to derive trades by comparing to old
+    for v in prob.variables():
+        #print(v.name, "=", v.varValue)
+        model_df.loc[v.name,'NewPort'] = model_df.loc[v.name,'Par_no_default'] + v.varValue * \
+            (1+(100-model_df.loc[v.name,'Ask'])/100 if v.varValue > 0 else 
+            1+(100-model_df.loc[v.name,'Bid'])/100 )
+        model_df.loc[v.name,'CashDelta'] = v.varValue
+        model_df.loc[v.name,'Trade'] = 'Buy' if v.varValue > 0 else 'Sale' if v.varValue < 0 else np.nan
+    
+    return model_df
+
+############################################################################################
+@xl_func("str[] array, float[] array: object ",auto_resize=True)
+def constraint_builder():
+    """
+    This function is for reading user chosen inputs from excel
+    and building resultant dict of constraints for the optimization solver
+    
+    Arg in:
+        
+    Output:
+        constraintDict:  dictionary of inputs and constraints
+                        (to be used by the CLOOpt())
+    """
+    upperTradable = 1e6
+    Cash_to_Spend = 0
+    WARFTest = 2931
+    WARFcp = 2772
+    WARFdelta = WARFTest - WARFcp
+    RecoveryTest = 0.42
+    RRcp = 0.417
+    RRdelta = RecoveryTest - RRcp
+    DiversityTest = -1
+    PBLim = -2e6
+    
+    
+    return constraintDict
