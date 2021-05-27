@@ -12,6 +12,7 @@ import datetime as dt
 #import blpapi
 #from xbbg import blp
 from pyxll import xl_func
+from pulp import *
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/'
 file = 'CLO17 portfolio as of 04.15.21.xlsm'
@@ -178,7 +179,7 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     dscore = df_merged['Industry\nDiversity\nScore'].sum()
     return dscore
 ################################################################
-@xl_func
+@xl_func("dataframe<index=True>, str[] array: float", auto_resize=True)
 def weighted_average(model_df,cols):
     """
     Calculates the weighted average variable
@@ -736,7 +737,9 @@ def create_model_port_df(filepath):
     # new, create the marginal stats in main call, same with inside and outside
     model_port = create_marginal_stats(model_port)
     model_port = inside_outside(model_port,['Current', 'Potential'])
-
+    
+    # convert the C, Lien Type, Sub 80, etc to 1/0 for constraints
+    model_port = convert_to_binary(model_port)
     #drop the REP Lines
     try:
         model_port = model_port.drop(model_port[model_port['Issuer'].str.match('zz_LXREP')].index)
@@ -1108,8 +1111,8 @@ def df_type(df):
     print("Type: ",type(df))
     return type(df)
 ############################################################################################
-@xl_func("dataframe<index=True>,str[] array, float[] array, float[] array: object")
-def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"):  #,targets
+@xl_func("dataframe<index=True>,float[] array, float[] array, float[] array, str: object")
+def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targets
     """
     This uses the PuLP optimizer whose objective is to try to maximize 
     desirability given a set of constraints. You control which stats you
@@ -1148,22 +1151,37 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"
     RRdelta = RecoveryTest - RRcp
     DiversityTest = -1
 
-
+    #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
+    SubC_Constr = keyConstraints[6]*(currStats[13]+PBLim) - currStats[8]*currStats[13]
+    Lien_Constr = keyConstraints[7]*(currStats[13]+PBLim) - currStats[9]*currStats[13]
+    Sub80_Constr = keyConstraints[8]*(currStats[13]+PBLim) - currStats[10]*currStats[13]
+    Sub90_Constr = keyConstraints[9]*(currStats[13]+PBLim) - currStats[11]*currStats[13]
+    Cov_Constr = keyConstraints[10]*(currStats[13]+PBLim) - currStats[12]*currStats[13]
+    #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
+    
     # Create the 'prob' variable to contain the problem data
     prob = LpProblem(probName,LpMaximize)   # <- Max attractiveness, could be just Spread
 
     # Creates a list of the Features to use in problem
-    Trades = model_port.index
+    Trades = model_df.index
     Trades = Trades.unique()  # need to combine stats for these
 
     # A dictionary of the attractiveness of each of the Loans is created
-    attractiveness = dict(zip(model_df['Desirability'].index,model_df['Desirability'].values))
+    desirability = dict(zip(model_df['Desirability'].index,model_df['Desirability'].values))
 
     # A dictionary of the Rating Factor in each of the Loans is created
     WARF = dict(zip(model_df['Adj. WARF NEW'].index,model_df['Adj. WARF NEW'].values))
 
     # A dictionary of the Recovery Rate in each of the Loans is created
     WARR = dict(zip(model_df['S&P Recovery Rate (AAA)'].index,model_df['S&P Recovery Rate (AAA)'].values)) #,'MC Div Score'
+    
+    # dictionaries for Lien Type, Low Ratings, Cov Lite & Sub 80/90 Priced loans
+    LienTwo = dict(zip(model_df['Lien'].index,model_df['Lien'].values))
+    CovLite = dict(zip(model_df['CovLite'].index,model_df['CovLite'].values))
+    SubC    = dict(zip(model_df['C_or_Less'].index,model_df['C_or_Less'].values))
+    SubEighty = dict(zip(model_df['Sub80'].index,model_df['Sub80'].values))
+    SubNinety = dict(zip(model_df['Sub90'].index,model_df['Sub90'].values))
+    
 
     # A dictionary of the current port positions in each of the Loans is created
     CP = dict(zip(model_df['Current Portfolio'].index,model_df['Current Portfolio'].values)) #,'CP'
@@ -1178,11 +1196,11 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"
     # I need the -cp_i <= t_i <= trade_size_limit (i.e 4e6)
     trades = [LpVariable(format(i), lowBound = -CP[i],  upBound = upperTradable) for i in Trades]
 
-    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable
-    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i
+    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
+    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
 
     # The objective function is added to 'prob' first
-    prob += lpSum([attractiveness[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
+    prob += lpSum([desirability[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
 
     # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
     prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding"
@@ -1194,8 +1212,14 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"
     # then the Test Condition Hard constriants, WARF,RR, Div, etc
     prob += lpSum([WARF[i] * t for t, i in zip(trades,Trades)]) <= WARFdelta, "WARF Test"
     prob += lpSum([WARR[i] * t for t, i in zip(trades,Trades)]) >= RRdelta, "Recovery Test"
-    # need to 
+    # need to derive a better representation of this constraint
     prob += lpSum([mcDiversity[i] * t for t, i in zip(trades,Trades)]) >= DiversityTest, "Diversity Test (simplified)"
+    
+    #prob += lpSum([LienTwo[i] * t for t, i in zip(trades,Trades)]) <= Lien_Constr, "2nd Lien Test"
+    prob += lpSum([CovLite[i] * t for t, i in zip(trades,Trades)]) <= Cov_Constr, "Cov Test"
+    prob += lpSum([SubC[i] * t for t, i in zip(trades,Trades)]) <= SubC_Constr, "Sub C Test"
+    prob += lpSum([SubEighty[i] * t for t, i in zip(trades,Trades)]) <= Sub80_Constr, "Sub 80 Test"
+    prob += lpSum([SubNinety[i] * t for t, i in zip(trades,Trades)]) <= Sub90_Constr, "Sub 90 Test"
 
     # The problem data is written to an .lp file
     prob.writeLP(probName+".lp")
@@ -1217,7 +1241,23 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName="default"
         model_df.loc[v.name,'Trade'] = 'Buy' if v.varValue > 0 else 'Sale' if v.varValue < 0 else np.nan
     
     return model_df
-
+         
+############################################################################################
+@xl_func("dataframe<index=True>: dataframe<index=True> ",auto_resize=True)
+def return_trades(model_df):         
+    keyFeatures = ['Parent Company','Trade','Par_no_default','NewPort',
+                   'Spread','Adj. WARF NEW','S&P Recovery Rate (AAA)','Desirability']
+    #trade_set = (model_df.loc[~model_df['Trade'].isna(),keyFeatures]).sort_values(by=['Trade','Desirability']).copy()
+    return (model_df.loc[~model_df['Trade'].isna(),keyFeatures]).sort_values(by=['Trade','Desirability'])
+############################################################################################
+@xl_func("dataframe<index=True>: object")
+def convert_to_binary(model_df):
+    model_df['Lien'] = model_df['Lien Type'].map({'Second Lien':1, 'First Lien':0})
+    model_df['CovLite'] = model_df['Cov Lite'].map({'Yes':1, 'No':0})
+    model_df['C_or_Less'] = model_df['Adj. WARF NEW'].apply(lambda x: 1 if x >= 4770 else 0)
+    model_df['Sub80'] = model_df['Bid'].apply(lambda x: 1 if x < 80 else 0)
+    model_df['Sub90'] = model_df['Bid'].apply(lambda x: 1 if x < 90 else 0)
+    return model_df
 ############################################################################################
 @xl_func("str[] array, float[] array: object ",auto_resize=True)
 def constraint_builder():
