@@ -239,6 +239,9 @@ def blended_price(model_df):
             apply(lambda x: ((x[0]*x[4]/100+(x[6]+x[1])*x[2])/x[3])*100 if x[0]<1 else \
                             ((x[0]*x[5]/100+(x[6]+x[1])*x[2])/x[3])*100,axis=1 )  #I get runtime warnings often
     model_df.loc[model_df['Blended Price'].isna(),'Blended Price'] = 0
+    # use the Ask side of the market to fill in purchase prices on non owned loans for optimizer,
+    # this way we have what we paid for the loan and what we would pay for the loan
+    model_df['Blended Price'] = model_df[['Blended Price','Ask']].apply(lambda x: x[0] if x[0]!=0 else x[1],axis=1)
     return model_df
 ################################################################
 #
@@ -667,6 +670,7 @@ def model_pricing(model_df):
     model_df['Now'] = model_df[['Current Portfolio',
                                       'Addtl Purchase Amt']].sum(axis=1)
     
+    model_df['Mid'] = 0.5*model_df['Ask'].values + 0.5*model_df['Bid'].values
     #create the Blended Actual Purchase Price field
     model_df = BAPP(model_df)
 
@@ -1085,13 +1089,6 @@ def lower_WARF(model_df,target_WARF,Parburn_crit=0):
                 
         
     return model_df #new_port, curr_port #, sales, buys
-###########################################################################################
-@xl_func("dataframe<index=True>: dataframe<index=True>", auto_resize=True)
-def show_tradelist(model_df):
-    return (model_df.loc[~model_df['Trade'].isna(),['Parent Company','Trade','Par_no_default',
-                                             'PnD_postTrade','Spread','Adj. WARF NEW','S&P Recovery Rate (AAA)',
-                                             'Desirability']]).sort_values(by=['Trade','Desirability'])
-
 ############################################################################################
 @xl_func
 def liquidity_metrics(model_df):
@@ -1185,7 +1182,7 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
 
     # A dictionary of the current port positions in each of the Loans is created
     CP = dict(zip(model_df['Current Portfolio'].index,model_df['Current Portfolio'].values)) #,'CP'
-    #Ask = dict(model_port['Ask'])
+    Ask = dict(zip(model_df['Ask'].index,model_df['Ask'].values))
     Bid = dict(zip(model_df['Bid'].index,model_df['Bid'].values))
     #APP = dict(model_port['Blended Actual Purchase Prices'])
 
@@ -1203,7 +1200,9 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     prob += lpSum([desirability[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
 
     # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
-    prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding"
+    prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Bid"
+    prob += lpSum([ Ask[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Ask"
+    # prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
     # I think this needs to be Bid for CP and Ask for loan
     prob += lpSum([((100-Bid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
     # still kind of weird that this is needed, must be in corner solution
@@ -1215,11 +1214,12 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     # need to derive a better representation of this constraint
     prob += lpSum([mcDiversity[i] * t for t, i in zip(trades,Trades)]) >= DiversityTest, "Diversity Test (simplified)"
     
-    #prob += lpSum([LienTwo[i] * t for t, i in zip(trades,Trades)]) <= Lien_Constr, "2nd Lien Test"
+    #
     prob += lpSum([CovLite[i] * t for t, i in zip(trades,Trades)]) <= Cov_Constr, "Cov Test"
     prob += lpSum([SubC[i] * t for t, i in zip(trades,Trades)]) <= SubC_Constr, "Sub C Test"
     prob += lpSum([SubEighty[i] * t for t, i in zip(trades,Trades)]) <= Sub80_Constr, "Sub 80 Test"
     prob += lpSum([SubNinety[i] * t for t, i in zip(trades,Trades)]) <= Sub90_Constr, "Sub 90 Test"
+    prob += lpSum([LienTwo[i] * t for t, i in zip(trades,Trades)]) <= Lien_Constr, "2nd Lien Test"
 
     # The problem data is written to an .lp file
     prob.writeLP(probName+".lp")
@@ -1243,44 +1243,20 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     return model_df
          
 ############################################################################################
-@xl_func("dataframe<index=True>: dataframe<index=True> ",auto_resize=True)
-def return_trades(model_df):         
-    keyFeatures = ['Parent Company','Trade','Par_no_default','NewPort',
-                   'Spread','Adj. WARF NEW','S&P Recovery Rate (AAA)','Desirability']
+@xl_func("dataframe<index=True>, str[] array: dataframe<index=True> ",auto_resize=True)
+def return_trades(model_df,keyFeatures):         
+    #keyFeatures = ['Parent Company','Trade','Par_no_default','NewPort',
+    #               'Spread','Adj. WARF NEW','S&P Recovery Rate (AAA)','Desirability']
     #trade_set = (model_df.loc[~model_df['Trade'].isna(),keyFeatures]).sort_values(by=['Trade','Desirability']).copy()
     return (model_df.loc[~model_df['Trade'].isna(),keyFeatures]).sort_values(by=['Trade','Desirability'])
 ############################################################################################
 @xl_func("dataframe<index=True>: object")
 def convert_to_binary(model_df):
     model_df['Lien'] = model_df['Lien Type'].map({'Second Lien':1, 'First Lien':0})
+    model_df.loc[model_df['Lien'].isna(),['Lien']] = 0 # the Bonds don't have the Lien field
     model_df['CovLite'] = model_df['Cov Lite'].map({'Yes':1, 'No':0})
     model_df['C_or_Less'] = model_df['Adj. WARF NEW'].apply(lambda x: 1 if x >= 4770 else 0)
     model_df['Sub80'] = model_df['Bid'].apply(lambda x: 1 if x < 80 else 0)
     model_df['Sub90'] = model_df['Bid'].apply(lambda x: 1 if x < 90 else 0)
     return model_df
 ############################################################################################
-@xl_func("str[] array, float[] array: object ",auto_resize=True)
-def constraint_builder():
-    """
-    This function is for reading user chosen inputs from excel
-    and building resultant dict of constraints for the optimization solver
-    
-    Arg in:
-        
-    Output:
-        constraintDict:  dictionary of inputs and constraints
-                        (to be used by the CLOOpt())
-    """
-    upperTradable = 1e6
-    Cash_to_Spend = 0
-    WARFTest = 2931
-    WARFcp = 2772
-    WARFdelta = WARFTest - WARFcp
-    RecoveryTest = 0.42
-    RRcp = 0.417
-    RRdelta = RecoveryTest - RRcp
-    DiversityTest = -1
-    PBLim = -2e6
-    
-    
-    return constraintDict
