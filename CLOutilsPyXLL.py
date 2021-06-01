@@ -750,6 +750,8 @@ def create_model_port_df(filepath):
     finally:
         print("skipped the zz_LXREP line drops")
         
+    model_port['Ind'] = 1  # put this dummy in for use to constrain the max number of trades
+        
     return model_port
 ##################################################################################
 @xl_func("dataframe<index=True>: object")
@@ -1108,8 +1110,8 @@ def df_type(df):
     print("Type: ",type(df))
     return type(df)
 ############################################################################################
-@xl_func("dataframe<index=True>,float[] array, float[] array, float[] array, str: object")
-def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targets
+@xl_func("dataframe<index=True>,float[] array, float[] array, float[] array, dataframe<index=True>, str[] array, str: object")
+def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusionTrades,probName):  #,targets, ,exclusionCrit
     """
     This uses the PuLP optimizer whose objective is to try to maximize 
     desirability given a set of constraints. You control which stats you
@@ -1139,6 +1141,9 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     Cash_to_Spend = otherConstraints[0]
     PBLim = otherConstraints[1]
     upperTradable = otherConstraints[2]
+    maxTrades = otherConstraints[3]
+    
+    print("maxTrades: ",maxTrades)
     
     WARFTest = keyConstraints[1]
     WARFcp = currStats[2]
@@ -1146,7 +1151,7 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     RecoveryTest = keyConstraints[4]
     RRcp = currStats[5]
     RRdelta = RecoveryTest - RRcp
-    DiversityTest = -1
+    DiversityTest = -100
 
     #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
     SubC_Constr = keyConstraints[6]*(currStats[13]+PBLim) - currStats[8]*currStats[13]
@@ -1184,17 +1189,29 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     CP = dict(zip(model_df['Current Portfolio'].index,model_df['Current Portfolio'].values)) #,'CP'
     Ask = dict(zip(model_df['Ask'].index,model_df['Ask'].values))
     Bid = dict(zip(model_df['Bid'].index,model_df['Bid'].values))
+    #Mid = dict(zip(model_df['Mid'].index,model_df['Mid'].values))
     #APP = dict(model_port['Blended Actual Purchase Prices'])
+    Ind = dict(zip(model_df['Ind'].index,model_df['Ind'].values))
 
     # A dictionary of the fibre percent in each of the Loans is created
     mcDiversity = dict(zip(model_df['MC Div Score'].index,model_df['MC Div Score'].values)) 
+    
+    UB = CP.copy()
+    LB = CP.copy()
+    for k  in CP:
+        LB[k] = max(-CP[k],-upperTradable)
+        UB[k] = upperTradable
+    
+    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
+    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
+    for i in seedTrades.index:
+        LB[i] = seedTrades.loc[i].values[0]
+        UB[i] = seedTrades.loc[i].values[0]
 
     # This limit the sells to the amount in current portfolio and up to amt tradeable
     # I need the -cp_i <= t_i <= trade_size_limit (i.e 4e6)
-    trades = [LpVariable(format(i), lowBound = -CP[i],  upBound = upperTradable) for i in Trades]
-
-    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
-    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
+    trades = [LpVariable(format(i), lowBound = LB[i],  upBound = UB[i]) for i in Trades]
+    
 
     # The objective function is added to 'prob' first
     prob += lpSum([desirability[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
@@ -1202,12 +1219,17 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,probName):  #,targ
     # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
     prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Bid"
     prob += lpSum([ Ask[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Ask"
-    # prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
+    #prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
     # I think this needs to be Bid for CP and Ask for loan
     prob += lpSum([((100-Bid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
+    #prob += lpSum([((100-Mid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
     # still kind of weird that this is needed, must be in corner solution
     prob += lpSum([((1+(100-Bid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
+    #prob += lpSum([((1+(100-Mid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
 
+    #prob += lpSum([Ind[i] for i in Trades]) <= maxTrades, "Maximum Number of Trades"
+       
+    
     # then the Test Condition Hard constriants, WARF,RR, Div, etc
     prob += lpSum([WARF[i] * t for t, i in zip(trades,Trades)]) <= WARFdelta, "WARF Test"
     prob += lpSum([WARR[i] * t for t, i in zip(trades,Trades)]) >= RRdelta, "Recovery Test"
