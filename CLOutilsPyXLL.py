@@ -228,7 +228,7 @@ def BAPP(model_df):
     model_df['Blended Actual Purchase Prices'] = \
         model_df[['Addtl Purchase Amt','Purch Price of Addtl Purch',
                     'Current Portfolio','Actual Purch Price of Current Positions']].\
-        apply(lambda x: 100*((x[0]*x[1]/100)+(x[2]*x[3]/100))/(x[0]+x[2]),axis=1) #I get runtime warnings often
+        apply(lambda x: 100*((x[0]*x[1]/100)+(x[2]*x[3]/100))/(x[0]+x[2]),axis=1) #I get runtime warnings often (prob div by 0)
     model_df.loc[model_df['Blended Actual Purchase Prices'].isna(),'Blended Actual Purchase Prices'] = 0
     return model_df
 ################################################################
@@ -236,8 +236,12 @@ def BAPP(model_df):
 def blended_price(model_df):
     model_df['Blended Price'] = model_df[['Potential Trades',
             'Addtl Purchase Amt','Blended Actual Purchase Prices','Total','Bid','Ask','Current Portfolio']].\
-            apply(lambda x: ((x[0]*x[4]/100+(x[6]+x[1])*x[2])/x[3])*100 if x[0]<1 else \
+            apply(lambda x: ((x[0]*x[4]/100+(x[6]+x[1])*x[2])/x[3])*100 if x[0]<0 else \
                             ((x[0]*x[5]/100+(x[6]+x[1])*x[2])/x[3])*100,axis=1 )  #I get runtime warnings often
+#  This was x[0]<1, need to check but it should be <0.  What was I thinking?
+#            apply(lambda x: ((x[0]*x[4]/100+(x[6]+x[1])*x[2])/x[3])*100 if x[0]<1 else \
+#                            ((x[0]*x[5]/100+(x[6]+x[1])*x[2])/x[3])*100,axis=1 )  
+
     model_df.loc[model_df['Blended Price'].isna(),'Blended Price'] = 0
     # use the Ask side of the market to fill in purchase prices on non owned loans for optimizer,
     # this way we have what we paid for the loan and what we would pay for the loan
@@ -551,6 +555,21 @@ def prepost_Port_stats(model_df, cols):
     
     return cstats
 ################################################################
+@xl_func("dataframe<index=True>,str[] array,float[] array: dataframe<index=True>", auto_resize = True)
+def whatif_trades(model_df, LXIDtrades,AMTtrades):
+    
+    print(LXIDtrades)
+    
+    model_df['Whatif Trades'] = 0
+    model_df.loc[LXIDtrades,['Whatif Trades']] = AMTtrades
+
+    model_df = par_burn_new(model_df,pot_trades='Whatif Trades')
+    model_df['Whatif Portfolio'] = model_df['Current Portfolio'] + model_df['Total_Par_Build_Loss']
+    
+    cstats = prepost_Port_stats(model_df, ['Current Portfolio','Whatif Portfolio'])
+    
+    return cstats
+################################################################
 @xl_func
 def replines(model_df):
     replines = model_df[model_df['Issuer'].str.match('zz_LXREP')]
@@ -589,7 +608,7 @@ def get_master_df(filepath,sheet='MASTER'):
     return master_df
 ################################################################
 @xl_func
-def get_CLO_df(filepath,sheet='CLO 21 Port as of 3.18'):
+def get_CLO_df(filepath,sheet='CLO'):
     CLO_df = pd.read_excel(filepath,sheet_name=sheet,header=6,usecols='A:K',engine='openpyxl')
     CLO_df.dropna(inplace=True)
     CLO_df.rename(columns={'Cusip or LIN':'LXID'},inplace=True)
@@ -641,11 +660,28 @@ def get_ind_avg_eu_table(filepath,sheet='Diversity'):
 ################################################################
 @xl_func
 def get_pot_trades(filepath,sheet='Model Portfolio'):
-    pot_trades = pd.read_excel(filepath,sheet_name=sheet,header=15,usecols='C:G',engine='openpyxl')
+    pot_trades = pd.read_excel(filepath,sheet_name=sheet,header=15,usecols='A:F',engine='openpyxl')
     pot_trades.rename(columns={'LX ID':'LXID'},inplace=True)
     pot_trades.set_index('LXID', inplace=True)
 
     return pot_trades
+################################################################
+def add_attractiveness(model_df):
+    # create an attractiveness field, now just based on price
+    for x in model_df.index:
+        if (model_df.loc[x,'Ask'] >= 100):
+            model_df.loc[x,'Attractiveness'] = 5
+        elif (100 > model_df.loc[x,'Ask']) & (model_df.loc[x,'Ask'] >= 95):
+            model_df.loc[x,'Attractiveness'] = 4
+        elif (95 > model_df.loc[x,'Ask']) & (model_df.loc[x,'Ask'] >= 90):
+            model_df.loc[x,'Attractiveness'] = 3
+        elif (90 > model_df.loc[x,'Ask']) & (model_df.loc[x,'Ask'] >= 85):
+            model_df.loc[x,'Attractiveness'] = 2
+        else:
+            model_df.loc[x,'Attractiveness'] = 1
+    
+    return model_df
+    
 ################################################################
 @xl_func
 def model_pricing(model_df):
@@ -680,6 +716,8 @@ def model_pricing(model_df):
     # create the Par Build and Loss fields
     model_df = par_burn_new(model_df)
     
+    model_df = add_attractiveness(model_df)
+    
     model_df['Par_no_default'] = model_df['Total'].values
     model_df.loc[model_df['Default']=='Y','Par_no_default'] = 0
 
@@ -694,10 +732,16 @@ def model_pricing(model_df):
 @xl_func("str: object")
 def create_model_port_df(filepath):
     
+    #CLO_tab.str.match('C')
+    xl = pd.ExcelFile(filepath)
+    sheet_list = xl.sheet_names
+    Tabs = [s for s in sheet_list if any(xs in s for xs in ['Bid.Ask','CLO'])]
+    del xl
+    
     # first read in all relevant tables from the CLO model sprdsht
     master_df = get_master_df(filepath,sheet='MASTER')
-    CLO_df = get_CLO_df(filepath,sheet=CLO_tab)
-    bidask_df = get_bidask_df(filepath,sheet=Bid_tab)
+    CLO_df = get_CLO_df(filepath,sheet=Tabs[1])
+    bidask_df = get_bidask_df(filepath,sheet=Tabs[0])
     moodys_score, moodys_rfTable = get_moodys_rating2rf_tables(filepath,sheet='New WARF')
     new_sp_rr, lien_rr, bond_table = get_recovery_rate_tables(filepath,sheet='SP RR Updated')
     #ind_avg_eu = get_ind_avg_eu_table(filepath,sheet='Diversity')
@@ -750,7 +794,10 @@ def create_model_port_df(filepath):
     finally:
         print("skipped the zz_LXREP line drops")
         
-    model_port['Ind'] = 1  # put this dummy in for use to constrain the max number of trades
+    #model_port['Ind'] = 1  # put this dummy in for use to constrain the max number of trades
+    
+    # there is a duplicated row
+    model_port = model_port.loc[model_port.index.drop_duplicates(keep='first')]
         
     return model_port
 ##################################################################################
@@ -764,6 +811,7 @@ def drop_replines(model_df):
 ##################################################################################
 @xl_func("dataframe<index=True>,str[] array, float[] array, float[] array: object")
 def desirability(model_df,keyStats,weights,highLow):
+    weights = np.array(weights)/sum(weights)
     def desire(model_df,keyStats,weights,highLow):
             return (((model_df[keyStats]-model_df[keyStats].mean())/model_df[keyStats].std())*\
                     (np.array(weights)*np.array(highLow))).sum(axis=1)
@@ -1103,15 +1151,15 @@ def liquidity_metrics(model_df):
 ############################################################################################
 @xl_func("dataframe<index=True>: dataframe<index=True>",auto_resize=True)
 def df_describe(df):
-    return df.describe()
+    return df.describe().T
 ############################################################################################
 @xl_func #("dataframe<index=True>: ",auto_resize=True)
 def df_type(df):
     print("Type: ",type(df))
     return type(df)
 ############################################################################################
-@xl_func("dataframe<index=True>,float[] array, float[] array, float[] array, dataframe<index=True>, str[] array, str: object")
-def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusionTrades,probName):  #,targets, ,exclusionCrit
+@xl_func("dataframe<index=True>,dict<str, float>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,probName):  #,targets, ,exclusionCrit, ,exclusionTrades
     """
     This uses the PuLP optimizer whose objective is to try to maximize 
     desirability given a set of constraints. You control which stats you
@@ -1138,27 +1186,27 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusi
     # objective
     
     # this would be better as a dictionary in case the sheet changes order
-    Cash_to_Spend = otherConstraints[0]
-    PBLim = otherConstraints[1]
-    upperTradable = otherConstraints[2]
-    maxTrades = otherConstraints[3]
+    Cash_to_Spend = otherConstraints['Cash to spend/raise']
+    PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
+    upperTradable = otherConstraints['Max trade size (on buys)']
+    #maxTrades = otherConstraints[3]   # not using atm
     
-    print("maxTrades: ",maxTrades)
-    
-    WARFTest = keyConstraints[1]
-    WARFcp = currStats[2]
+      
+    WARFTest = keyConstraints['Adj. WARF NEW']
+    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)']
     WARFdelta = WARFTest - WARFcp
-    RecoveryTest = keyConstraints[4]
-    RRcp = currStats[5]
+    RecoveryTest = keyConstraints['S&P Recovery Rate (AAA)']
+    RRcp = currStats['Min S&P Recovery Rate Class A-1a']
     RRdelta = RecoveryTest - RRcp
     DiversityTest = -100
 
+    TotalPar = currStats['Total Portfolio Par (excl. Defaults)']
     #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
-    SubC_Constr = keyConstraints[6]*(currStats[13]+PBLim) - currStats[8]*currStats[13]
-    Lien_Constr = keyConstraints[7]*(currStats[13]+PBLim) - currStats[9]*currStats[13]
-    Sub80_Constr = keyConstraints[8]*(currStats[13]+PBLim) - currStats[10]*currStats[13]
-    Sub90_Constr = keyConstraints[9]*(currStats[13]+PBLim) - currStats[11]*currStats[13]
-    Cov_Constr = keyConstraints[10]*(currStats[13]+PBLim) - currStats[12]*currStats[13]
+    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C']*TotalPar
+    Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien']*TotalPar
+    Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80']*TotalPar
+    Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90']*TotalPar
+    Cov_Constr = keyConstraints['CovLite']*(TotalPar+PBLim) - currStats['Percent CovLite']*TotalPar
     #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
     
     # Create the 'prob' variable to contain the problem data
@@ -1166,7 +1214,7 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusi
 
     # Creates a list of the Features to use in problem
     Trades = model_df.index
-    Trades = Trades.unique()  # need to combine stats for these
+    Trades = Trades.unique()  # edit 6/4/21 fixed this in orig df creation, left here JIC
 
     # A dictionary of the attractiveness of each of the Loans is created
     desirability = dict(zip(model_df['Desirability'].index,model_df['Desirability'].values))
@@ -1191,15 +1239,16 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusi
     Bid = dict(zip(model_df['Bid'].index,model_df['Bid'].values))
     #Mid = dict(zip(model_df['Mid'].index,model_df['Mid'].values))
     #APP = dict(model_port['Blended Actual Purchase Prices'])
-    Ind = dict(zip(model_df['Ind'].index,model_df['Ind'].values))
+    #Ind = dict(zip(model_df['Ind'].index,model_df['Ind'].values))  # this was just a col of 1s, like I but vector, not needed
 
     # A dictionary of the fibre percent in each of the Loans is created
     mcDiversity = dict(zip(model_df['MC Div Score'].index,model_df['MC Div Score'].values)) 
     
+    # create the loan-wise upper and lower limits
     UB = CP.copy()
     LB = CP.copy()
     for k  in CP:
-        LB[k] = max(-CP[k],-upperTradable)
+        LB[k] = max(-CP[k],-upperTradable)  # no shorting and limited sell amt
         UB[k] = upperTradable
     
     # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
@@ -1208,11 +1257,21 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusi
         LB[i] = seedTrades.loc[i].values[0]
         UB[i] = seedTrades.loc[i].values[0]
 
+    # Can't buy unAttractive loans
+    for i in model_df.loc[(model_df['Attractiveness']==1) | (model_df['Attractiveness']==2) ].index:
+        UB[i] = 0
+        
+    # Can't sell very Attractive loans *we own*
+    # for i in model_df.loc[(model_df['Attractiveness']==5) & (model_df['Current Portfolio']!=0) ].index:
+    
+    # Can't sell very Attractive loans
+    for i in model_df.loc[(model_df['Attractiveness']==5) ].index:
+        LB[i] = 0
+
     # This limit the sells to the amount in current portfolio and up to amt tradeable
-    # I need the -cp_i <= t_i <= trade_size_limit (i.e 4e6)
+    # I need the -cp_i <= t_i <= trade_size_limit (e.g. 1e6)
     trades = [LpVariable(format(i), lowBound = LB[i],  upBound = UB[i]) for i in Trades]
     
-
     # The objective function is added to 'prob' first
     prob += lpSum([desirability[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
 
@@ -1227,12 +1286,15 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,exclusi
     prob += lpSum([((1+(100-Bid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
     #prob += lpSum([((1+(100-Mid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
 
+    # this doesn't work! 
     #prob += lpSum([Ind[i] for i in Trades]) <= maxTrades, "Maximum Number of Trades"
-       
+    #prob += lpSum([ t for t, i in zip(trades,Trades)]) <= maxTrades*upperTradable, "Maximum Number of Trades"   
+    #prob += lpSum([ t - CP[i] for t, i in zip(trades,Trades)]) <= 2*maxTrades*upperTradable, "Maximum Number of Trades"   
     
     # then the Test Condition Hard constriants, WARF,RR, Div, etc
     prob += lpSum([WARF[i] * t for t, i in zip(trades,Trades)]) <= WARFdelta, "WARF Test"
     prob += lpSum([WARR[i] * t for t, i in zip(trades,Trades)]) >= RRdelta, "Recovery Test"
+    
     # need to derive a better representation of this constraint
     prob += lpSum([mcDiversity[i] * t for t, i in zip(trades,Trades)]) >= DiversityTest, "Diversity Test (simplified)"
     
