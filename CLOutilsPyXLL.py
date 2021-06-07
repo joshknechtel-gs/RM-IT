@@ -381,8 +381,8 @@ def create_marginal_stats(model_df, pot_trade_size=1e6):
 ################################################################
 ###  Main Port Stats Function
 ################################################################
-@xl_func("dataframe<index=True>, str: dataframe<index=True>", auto_resize=True)
-def Port_stats(model_df, weight_col='Par_no_default'):
+@xl_func("dataframe<index=True>, str, bool: dataframe<index=True>", auto_resize=True)
+def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
     """
     Arg in:
         model_df
@@ -433,64 +433,70 @@ def Port_stats(model_df, weight_col='Par_no_default'):
     
     Port_stats_df.loc['Min Floating Spread Test - no Libor Floors','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Spread'])*100
-    Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'] = \
-        Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'].apply('{:.2f}%'.format)
     
     Port_stats_df.loc['Min Floating Spread Test - With Libor Floors','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Adj. All in Rate'])*100
-    Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'] = \
-        Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'].apply('{:.2f}%'.format)
     
     Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Adj. WARF NEW'])
-    Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'] = \
-        Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'].apply('{:.0f}'.format)
-    
+     
     Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'WARF'])
-    Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'] = \
-        Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'].apply('{:.0f}'.format)
     
     Port_stats_df.loc['Min Moodys Recovery Rate Test','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Moodys Recovery Rate'])*100    
-    Port_stats_df.loc['Min Moodys Recovery Rate Test'] = \
-        Port_stats_df.loc['Min Moodys Recovery Rate Test'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Min S&P Recovery Rate Class A-1a','Portfolio Stats'] = \
             weighted_average(model_df,cols=[weight_col,'S&P Recovery Rate (AAA)'])*100
-    Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'] = \
-        Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Moodys Diversity Test','Portfolio Stats'] = diversity_score(model_df, weight_col)
-    Port_stats_df.loc['Moodys Diversity Test'] = \
-        Port_stats_df.loc['Moodys Diversity Test'].apply('{:.0f}'.format)
     
     ######   Was Total?
     Port_stats_df.loc['WAP','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Blended Price'])
-    Port_stats_df.loc['WAP'] = \
-        Port_stats_df.loc['WAP'].apply('${:.2f}'.format)
     
     Port_stats_df.loc['Percent C','Portfolio Stats'] = percentage_C(model_df, weight_col)*100
-    Port_stats_df.loc['Percent C'] = \
-        Port_stats_df.loc['Percent C'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Percent 2nd Lien','Portfolio Stats'] = percentage_SecondLien(model_df, weight_col)*100
-    Port_stats_df.loc['Percent 2nd Lien'] = \
-        Port_stats_df.loc['Percent 2nd Lien'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Percent Sub80','Portfolio Stats'] = percentage_SubEighty(model_df, weight_col)*100
-    Port_stats_df.loc['Percent Sub80'] = \
-        Port_stats_df.loc['Percent Sub80'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Percent Sub90','Portfolio Stats'] = percentage_SubNinety(model_df, weight_col)*100
-    Port_stats_df.loc['Percent Sub90'] = \
-        Port_stats_df.loc['Percent Sub90'].apply('{:.1f}%'.format)
     
     Port_stats_df.loc['Percent CovLite','Portfolio Stats'] = percentage_CovLite(model_df, weight_col)*100
-    Port_stats_df.loc['Percent CovLite'] = \
-        Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
+    Port_stats_df.loc['Total Portfolio Par (excl. Defaults)','Portfolio Stats'] = model_df[weight_col].sum()
 
+    
+    if format_output:
+        Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'] = \
+            Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'].apply('{:.2f}%'.format)
+        Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'] = \
+            Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'].apply('{:.2f}%'.format)
+        Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'] = \
+            Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'].apply('{:.0f}'.format)
+        Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'] = \
+            Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'].apply('{:.0f}'.format)
+        Port_stats_df.loc['Min Moodys Recovery Rate Test'] = \
+            Port_stats_df.loc['Min Moodys Recovery Rate Test'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'] = \
+            Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Moodys Diversity Test'] = \
+            Port_stats_df.loc['Moodys Diversity Test'].apply('{:.0f}'.format)
+        Port_stats_df.loc['WAP'] = \
+            Port_stats_df.loc['WAP'].apply('${:.2f}'.format)
+        Port_stats_df.loc['Percent C'] = \
+            Port_stats_df.loc['Percent C'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent 2nd Lien'] = \
+            Port_stats_df.loc['Percent 2nd Lien'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent Sub80'] = \
+            Port_stats_df.loc['Percent Sub80'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent Sub90'] = \
+            Port_stats_df.loc['Percent Sub90'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent CovLite'] = \
+            Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
+            Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
+        
   
     #Port_stats_df.loc['Pot Par B/L Sale','Portfolio Stats'] = model_df['Par_Build_Loss_Sale'].sum()
     #Port_stats_df.loc['Pot Par B/L Sale'] = \
@@ -503,10 +509,6 @@ def Port_stats(model_df, weight_col='Par_no_default'):
     #Port_stats_df.loc['Pot Par B/L Total','Portfolio Stats'] = model_df['Total_Par_Build_Loss'].sum()
     #Port_stats_df.loc['Pot Par B/L Total'] = \
     #    Port_stats_df.loc['Pot Par B/L Total'].apply('{:,.0f}'.format)    
-
-    Port_stats_df.loc['Total Portfolio Par (excl. Defaults)','Portfolio Stats'] = model_df[weight_col].sum()
-    Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
-        Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
 
     
 #    Port_stats_df.loc['Total Portfolio Par','Portfolio Stats'] = model_df['Total'].sum()
@@ -1158,8 +1160,8 @@ def df_type(df):
     print("Type: ",type(df))
     return type(df)
 ############################################################################################
-@xl_func("dataframe<index=True>,dict<str, float>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
-def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,probName):  #,targets, ,exclusionCrit, ,exclusionTrades
+@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+def CLOOpt(model_df,keyConstraints,otherConstraints,seedTrades,probName):  #,targets, ,exclusionCrit, ,exclusionTrades
     """
     This uses the PuLP optimizer whose objective is to try to maximize 
     desirability given a set of constraints. You control which stats you
@@ -1185,29 +1187,35 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,probNam
     # user determined constraints and weighting of the
     # objective
     
+    currStats = Port_stats(model_df,weight_col='Par_no_default',format_output=False)
+    currStats = dict(zip(currStats.index,currStats.values))
+    print(currStats)
+    
     # this would be better as a dictionary in case the sheet changes order
     Cash_to_Spend = otherConstraints['Cash to spend/raise']
     PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
     upperTradable = otherConstraints['Max trade size (on buys)']
     #maxTrades = otherConstraints[3]   # not using atm
-    
+    print('Cash_to_Spend: ',Cash_to_Spend,' PBLim: ',PBLim,' upperTradable: ',upperTradable)
       
     WARFTest = keyConstraints['Adj. WARF NEW']
-    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)']
+    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)'][0]
     WARFdelta = WARFTest - WARFcp
     RecoveryTest = keyConstraints['S&P Recovery Rate (AAA)']
-    RRcp = currStats['Min S&P Recovery Rate Class A-1a']
+    RRcp = currStats['Min S&P Recovery Rate Class A-1a'][0]
     RRdelta = RecoveryTest - RRcp
     DiversityTest = -100
+    print('WARFTest: ',WARFTest,' WARFcp: ',WARFcp,' RecoveryTest: ',RecoveryTest,' RRcp: ',RRcp)
 
-    TotalPar = currStats['Total Portfolio Par (excl. Defaults)']
+    TotalPar = currStats['Total Portfolio Par (excl. Defaults)'][0]
     #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
-    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C']*TotalPar
-    Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien']*TotalPar
-    Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80']*TotalPar
-    Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90']*TotalPar
-    Cov_Constr = keyConstraints['CovLite']*(TotalPar+PBLim) - currStats['Percent CovLite']*TotalPar
-    #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
+    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C'][0]*TotalPar/100
+    Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien'][0]*TotalPar/100
+    Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80'][0]*TotalPar/100
+    Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90'][0]*TotalPar/100
+    Cov_Constr = keyConstraints['CovLite']*(TotalPar+PBLim) - currStats['Percent CovLite'][0]*TotalPar/100
+    
+    print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
     
     # Create the 'prob' variable to contain the problem data
     prob = LpProblem(probName,LpMaximize)   # <- Max attractiveness, could be just Spread
@@ -1253,9 +1261,10 @@ def CLOOpt(model_df,currStats,keyConstraints,otherConstraints,seedTrades,probNam
     
     # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
     # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
-    for i in seedTrades.index:
-        LB[i] = seedTrades.loc[i].values[0]
-        UB[i] = seedTrades.loc[i].values[0]
+    if ~seedTrades.isnull().values.all():
+        for i in seedTrades.index:
+            LB[i] = seedTrades.loc[i].values[0]
+            UB[i] = seedTrades.loc[i].values[0]
 
     # Can't buy unAttractive loans
     for i in model_df.loc[(model_df['Attractiveness']==1) | (model_df['Attractiveness']==2) ].index:
