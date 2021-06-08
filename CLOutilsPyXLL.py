@@ -1334,7 +1334,196 @@ def CLOOpt(model_df,keyConstraints,otherConstraints,seedTrades,probName):  #,tar
         model_df.loc[v.name,'Trade'] = 'Buy' if v.varValue > 0 else 'Sale' if v.varValue < 0 else np.nan
     
     return model_df
-         
+
+############################################################################################
+@xl_func("dataframe<index=True>, str, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+def CLOOpt_Small(model_dfO,userVar,keyConstraints,otherConstraints,seedTrades,probName):  #,targets, ,exclusionCrit, ,exclusionTrades
+    """
+    This uses the PuLP optimizer whose objective is to try to maximize 
+    desirability given a set of constraints. You control which stats you
+    want to maximize (e.g. WAS, (-)WARF, etc) by choosing higher weights
+    in the desirability for the specified stat(s)
+    
+    Args in:
+        model_df: dataframe or object creating with the universe ands stats
+        keyStats: the stats which will be used in desirability and constraints
+        weights: weights in desirability
+        highLow: specifies whether the higher stat is good (e.g WAS) or low is good (e.g. WARF)
+        contraints: Constraints for the keyStats
+        targets: (future use)
+        Cash_to_Spend: if there is cash to spend or raise (-) then specify
+        probName: to name the problem to refer to the .lp later
+    Args out:
+        model_df: NewPort, CashDelta, Trade columns added with the solution if feasible
+    
+    """
+    
+    # from constraintDict we should build the constraints
+    # the intention is that this dict will be built from
+    # user determined constraints and weighting of the
+    # objective
+    model_df = model_dfO.copy()
+    currStats = Port_stats(model_df,weight_col='Par_no_default',format_output=False)
+    currStats = dict(zip(currStats.index,currStats.values))
+    print(currStats)
+    
+    # this would be better as a dictionary in case the sheet changes order
+    Cash_to_Spend = otherConstraints['Cash to spend/raise']
+    PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
+    upperTradable = otherConstraints['Max trade size (on buys)']
+    maxTrades = otherConstraints['Max # of new loans']   # not using atm
+    print('Cash_to_Spend: ',Cash_to_Spend,' PBLim: ',PBLim,' upperTradable: ',upperTradable)
+      
+        
+    # Let's cull the list down to a smaller list to optimize on
+    # Select the Max#Trades with the highest Desirability score in addition
+    # to the Current Portfolio and let the optimizer use those only
+    
+    #model_df = model_df[model_df]
+    # top trades not currently in portfolio
+    #model_df.loc[model_df['Categorical']=='Outside'].sort_values(by='Desirability', ascending=False)[0:maxTrades-1]
+    newLoans = model_df.loc[model_df['Categorical']=='Outside'].nlargest(maxTrades,'Desirability').index
+    model_df = model_df.loc[(model_df['Categorical']=='Current') | 
+               model_df.index.isin(newLoans)]
+        
+    WARFTest = keyConstraints['Adj. WARF NEW']
+    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)'][0]
+    WARFdelta = WARFTest - WARFcp
+    RecoveryTest = keyConstraints['S&P Recovery Rate (AAA)']
+    RRcp = currStats['Min S&P Recovery Rate Class A-1a'][0]
+    RRdelta = RecoveryTest - RRcp
+    DiversityTest = -100
+    print('WARFTest: ',WARFTest,' WARFcp: ',WARFcp,' RecoveryTest: ',RecoveryTest,' RRcp: ',RRcp)
+
+    TotalPar = currStats['Total Portfolio Par (excl. Defaults)'][0]
+    #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
+    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C'][0]*TotalPar/100
+    Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien'][0]*TotalPar/100
+    Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80'][0]*TotalPar/100
+    Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90'][0]*TotalPar/100
+    Cov_Constr = keyConstraints['CovLite']*(TotalPar+PBLim) - currStats['Percent CovLite'][0]*TotalPar/100
+    
+    print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
+    
+    # Create the 'prob' variable to contain the problem data
+    prob = LpProblem(probName,LpMaximize)   # <- Max attractiveness, could be just Spread
+
+    # Creates a list of the Features to use in problem
+    Trades = model_df.index
+    Trades = Trades.unique()  # edit 6/4/21 fixed this in orig df creation, left here JIC
+
+    # A dictionary of the attractiveness of each of the Loans is created
+    userMax = dict(zip(model_df[userVar].index,model_df[userVar].values))
+    desirability = dict(zip(model_df['Desirability'].index,model_df['Desirability'].values))
+
+    # A dictionary of the Rating Factor in each of the Loans is created
+    WARF = dict(zip(model_df['Adj. WARF NEW'].index,model_df['Adj. WARF NEW'].values))
+
+    # A dictionary of the Recovery Rate in each of the Loans is created
+    WARR = dict(zip(model_df['S&P Recovery Rate (AAA)'].index,model_df['S&P Recovery Rate (AAA)'].values)) #,'MC Div Score'
+    
+    # dictionaries for Lien Type, Low Ratings, Cov Lite & Sub 80/90 Priced loans
+    LienTwo = dict(zip(model_df['Lien'].index,model_df['Lien'].values))
+    CovLite = dict(zip(model_df['CovLite'].index,model_df['CovLite'].values))
+    SubC    = dict(zip(model_df['C_or_Less'].index,model_df['C_or_Less'].values))
+    SubEighty = dict(zip(model_df['Sub80'].index,model_df['Sub80'].values))
+    SubNinety = dict(zip(model_df['Sub90'].index,model_df['Sub90'].values))
+    
+
+    # A dictionary of the current port positions in each of the Loans is created
+    CP = dict(zip(model_df['Current Portfolio'].index,model_df['Current Portfolio'].values)) #,'CP'
+    Ask = dict(zip(model_df['Ask'].index,model_df['Ask'].values))
+    Bid = dict(zip(model_df['Bid'].index,model_df['Bid'].values))
+    #Mid = dict(zip(model_df['Mid'].index,model_df['Mid'].values))
+    #APP = dict(model_port['Blended Actual Purchase Prices'])
+    #Ind = dict(zip(model_df['Ind'].index,model_df['Ind'].values))  # this was just a col of 1s, like I but vector, not needed
+
+    # A dictionary of the fibre percent in each of the Loans is created
+    mcDiversity = dict(zip(model_df['MC Div Score'].index,model_df['MC Div Score'].values)) 
+    
+    # create the loan-wise upper and lower limits
+    UB = CP.copy()
+    LB = CP.copy()
+    for k  in CP:
+        LB[k] = max(-CP[k],-upperTradable)  # no shorting and limited sell amt
+        UB[k] = upperTradable
+    
+    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
+    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
+    if ~seedTrades.isnull().values.all():
+        for i in seedTrades.index:
+            LB[i] = seedTrades.loc[i].values[0]
+            UB[i] = seedTrades.loc[i].values[0]
+
+    # Can't buy unAttractive loans
+    for i in model_df.loc[(model_df['Attractiveness']==1) | (model_df['Attractiveness']==2) ].index:
+        UB[i] = 0
+        
+    # Can't sell very Attractive loans *we own*
+    # for i in model_df.loc[(model_df['Attractiveness']==5) & (model_df['Current Portfolio']!=0) ].index:
+    
+    # Can't sell very Attractive loans
+    for i in model_df.loc[(model_df['Attractiveness']==5) ].index:
+        LB[i] = 0
+
+    # This limit the sells to the amount in current portfolio and up to amt tradeable
+    # I need the -cp_i <= t_i <= trade_size_limit (e.g. 1e6)
+    trades = [LpVariable(format(i), lowBound = LB[i],  upBound = UB[i]) for i in Trades]
+    
+    # The objective function is added to 'prob' first
+    #prob += lpSum([desirability[i] * t for t, i in zip(trades,Trades)]), "Total Desirability of Loan Portfolio"
+    prob += lpSum([userMax[i] * t for t, i in zip(trades,Trades)]), "Max/Min of " + userVar + " of Loan Portfolio"
+    
+    # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
+    prob += lpSum([ Bid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Bid"
+    prob += lpSum([ Ask[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Ask"
+    #prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
+    # I think this needs to be Bid for CP and Ask for loan
+    prob += lpSum([((100-Bid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
+    #prob += lpSum([((100-Mid[i])/100 * t) for t, i in zip(trades,Trades)]) >= PBLim, "Par Burn Limit"
+    # still kind of weird that this is needed, must be in corner solution
+    prob += lpSum([((1+(100-Bid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
+    #prob += lpSum([((1+(100-Mid[i])/100) * t) for t, i in zip(trades,Trades)]) >= 0, "Must use cash raised"
+
+    # this doesn't work! 
+    #prob += lpSum([Ind[i] for i in Trades]) <= maxTrades, "Maximum Number of Trades"
+    #prob += lpSum([ t for t, i in zip(trades,Trades)]) <= maxTrades*upperTradable, "Maximum Number of Trades"   
+    #prob += lpSum([ t - CP[i] for t, i in zip(trades,Trades)]) <= 2*maxTrades*upperTradable, "Maximum Number of Trades"   
+    
+    # then the Test Condition Hard constriants, WARF,RR, Div, etc
+    prob += lpSum([WARF[i] * t for t, i in zip(trades,Trades)]) <= WARFdelta, "WARF Test"
+    prob += lpSum([WARR[i] * t for t, i in zip(trades,Trades)]) >= RRdelta, "Recovery Test"
+    
+    # need to derive a better representation of this constraint
+    prob += lpSum([mcDiversity[i] * t for t, i in zip(trades,Trades)]) >= DiversityTest, "Diversity Test (simplified)"
+    
+    #
+    prob += lpSum([CovLite[i] * t for t, i in zip(trades,Trades)]) <= Cov_Constr, "Cov Test"
+    prob += lpSum([SubC[i] * t for t, i in zip(trades,Trades)]) <= SubC_Constr, "Sub C Test"
+    prob += lpSum([SubEighty[i] * t for t, i in zip(trades,Trades)]) <= Sub80_Constr, "Sub 80 Test"
+    prob += lpSum([SubNinety[i] * t for t, i in zip(trades,Trades)]) <= Sub90_Constr, "Sub 90 Test"
+    prob += lpSum([LienTwo[i] * t for t, i in zip(trades,Trades)]) <= Lien_Constr, "2nd Lien Test"
+
+    # The problem data is written to an .lp file
+    prob.writeLP(probName+".lp")
+
+    # The problem is solved using PuLP's choice of Solver
+    prob.solve()
+
+    # The status of the solution is printed to the screen
+    print("Status:", LpStatus[prob.status])
+
+    # Each of the variables is printed with it's resolved optimum value
+    # so this would be new portfolio and new to derive trades by comparing to old
+    for v in prob.variables():
+        #print(v.name, "=", v.varValue)
+        model_df.loc[v.name,'NewPort'] = model_df.loc[v.name,'Par_no_default'] + v.varValue * \
+            (1+(100-model_df.loc[v.name,'Ask'])/100 if v.varValue > 0 else 
+            1+(100-model_df.loc[v.name,'Bid'])/100 )
+        model_df.loc[v.name,'CashDelta'] = v.varValue
+        model_df.loc[v.name,'Trade'] = 'Buy' if v.varValue > 0 else 'Sale' if v.varValue < 0 else np.nan
+    
+    return model_df
 ############################################################################################
 @xl_func("dataframe<index=True>, str[] array: dataframe<index=True> ",auto_resize=True)
 def return_trades(model_df,keyFeatures):         
