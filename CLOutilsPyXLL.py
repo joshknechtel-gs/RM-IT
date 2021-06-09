@@ -8,7 +8,7 @@ list of functions
 '''
 import numpy as np  
 import pandas as pd
-import datetime as dt
+#import datetime as dt
 #import blpapi
 #from xbbg import blp
 from pyxll import xl_func
@@ -161,6 +161,8 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     div_df.sort_values(by='Moodys Industry',inplace=True)
 
     # this keeps the industry, but groups on parent company for multiple loans
+    # shouldn't this be Obligor for Diversity field and not Parent Company?
+    # they are the same in our spreadsheet, but maybe need to be careful
     test = div_df.groupby(by=['Parent Company','Moodys Industry']).sum()
     avg_par_amt = test.sum()/test.count()   
     
