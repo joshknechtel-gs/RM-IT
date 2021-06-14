@@ -15,13 +15,13 @@ from pyxll import xl_func
 from pulp import *
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/'
-file = 'CLO17 portfolio as of 04.15.21.xlsm'
-filepath= path+file
-CLO_tab = 'CLO 17 Port as of 4.15'
-Bid_tab = 'Bid.Ask 4.15'
+#file = 'CLO17 portfolio as of 04.15.21.xlsm'
+#filepath= path+file
+#CLO_tab = 'CLO 17 Port as of 4.15'
+#Bid_tab = 'Bid.Ask 4.15'
 
 # Default trade size if not specified
-pot_trade_size=1e6
+#pot_trade_size=1e6
 
 ############################################################
 ### Key Constraints & Tests
@@ -95,7 +95,7 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     Arg out:
         dscore: the scalar measure of the IDS
     """
-    # calling this each time time (like in MC Diversity)
+    # calling this each time (like in MC Diversity)
     # makes the function unbearably slow. I tried setting it
     # as a global variable but that didn't solve the issue.
     # I need to look into a solution to set something up 
@@ -157,7 +157,13 @@ def diversity_score(model_df, weight_col='Par_no_default'):
     #first create the Par amount filtering out defaults
     #model_df['Par_no_default'] = model_df['Total']
     #model_df.loc[model_df['Default']=='Y','Par_no_default'] = 0
-    div_df = model_df[['Parent Company','Moodys Industry',weight_col]].copy()
+    
+    # 6/14/2021 added this...it is correct
+    # filters out the zero names from the average Par Amount (in the count)
+    mask = abs(model_df[weight_col]) > 0
+    
+    
+    div_df = model_df.loc[mask,['Parent Company','Moodys Industry',weight_col]].copy()
     div_df.sort_values(by='Moodys Industry',inplace=True)
 
     # this keeps the industry, but groups on parent company for multiple loans
@@ -415,7 +421,7 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
         'Min S&P Recovery Rate Class A-1a',
         'Moodys Diversity Test',
         'WAP',
-        'Percent C',
+        'Percent CCC & lower',
         'Percent 2nd Lien',
         'Percent Sub80',
         'Percent Sub90',
@@ -457,7 +463,7 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
     Port_stats_df.loc['WAP','Portfolio Stats'] = \
         weighted_average(model_df,cols=[weight_col,'Blended Price'])
     
-    Port_stats_df.loc['Percent C','Portfolio Stats'] = percentage_C(model_df, weight_col)*100
+    Port_stats_df.loc['Percent CCC & lower','Portfolio Stats'] = percentage_C(model_df, weight_col)*100
     
     Port_stats_df.loc['Percent 2nd Lien','Portfolio Stats'] = percentage_SecondLien(model_df, weight_col)*100
     
@@ -486,8 +492,8 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
             Port_stats_df.loc['Moodys Diversity Test'].apply('{:.0f}'.format)
         Port_stats_df.loc['WAP'] = \
             Port_stats_df.loc['WAP'].apply('${:.2f}'.format)
-        Port_stats_df.loc['Percent C'] = \
-            Port_stats_df.loc['Percent C'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent CCC & lower'] = \
+            Port_stats_df.loc['Percent CCC & lower'].apply('{:.1f}%'.format)
         Port_stats_df.loc['Percent 2nd Lien'] = \
             Port_stats_df.loc['Percent 2nd Lien'].apply('{:.1f}%'.format)
         Port_stats_df.loc['Percent Sub80'] = \
@@ -1211,7 +1217,7 @@ def CLOOpt(model_df,keyConstraints,otherConstraints,seedTrades,probName):  #,tar
 
     TotalPar = currStats['Total Portfolio Par (excl. Defaults)'][0]
     #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
-    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C'][0]*TotalPar/100
+    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent CCC & lower'][0]*TotalPar/100
     Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien'][0]*TotalPar/100
     Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80'][0]*TotalPar/100
     Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90'][0]*TotalPar/100
@@ -1399,7 +1405,7 @@ def CLOOpt_Small(model_dfO,userVar,keyConstraints,otherConstraints,seedTrades,pr
 
     TotalPar = currStats['Total Portfolio Par (excl. Defaults)'][0]
     #ParDenom = currStats[13]+PBLim # this is the lower limit of the new Par amt, use for % constraints
-    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent C'][0]*TotalPar/100
+    SubC_Constr = keyConstraints['C_or_Less']*(TotalPar+PBLim) - currStats['Percent CCC & lower'][0]*TotalPar/100
     Lien_Constr = keyConstraints['Lien']*(TotalPar+PBLim) - currStats['Percent 2nd Lien'][0]*TotalPar/100
     Sub80_Constr = keyConstraints['Sub80']*(TotalPar+PBLim) - currStats['Percent Sub80'][0]*TotalPar/100
     Sub90_Constr = keyConstraints['Sub90']*(TotalPar+PBLim) - currStats['Percent Sub90'][0]*TotalPar/100
@@ -1544,3 +1550,175 @@ def convert_to_binary(model_df):
     model_df['Sub90'] = model_df['Bid'].apply(lambda x: 1 if x < 90 else 0)
     return model_df
 ############################################################################################
+@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probName= "Trade_Minimization_Problem"):
+
+    trading_model = LpProblem(probName, LpMinimize)
+    t_vars = []
+    psi_vars = []
+    y_vars = []
+    A = 2
+
+    # Key Variables from our Constituent Universe
+    # turns the DF columns into an array, so be careful
+    # not to sort or modify the arrays or the indices
+    # won't line up.  I prefer to use the Dict way of
+    # setting constraints for this reason but this was
+    # simpler in this case.
+    CP = model_port['Current Portfolio'].to_numpy()
+    P = model_port['Current Portfolio'].to_numpy().sum()
+    Ask = model_port['Ask'].to_numpy()
+    Bid = model_port['Bid'].to_numpy()
+    LienTwo = model_port['Lien'].to_numpy()
+    CovLite = model_port['CovLite'].to_numpy()
+    SubCCC    = model_port['C_or_Less'].to_numpy()
+    SubEighty = model_port['Sub80'].to_numpy()
+    SubNinety = model_port['Sub90'].to_numpy()
+    D = model_port['Desirability'].to_numpy()
+    WAS = model_port['Spread'].to_numpy()
+    WARF = model_port['Adj. WARF NEW'].to_numpy()
+    WARR = model_port['S&P Recovery Rate (AAA)'].to_numpy()
+    WAMRR = model_port['Moodys Recovery Rate'].to_numpy()
+    mcDiv = model_port['MC Div Score'].to_numpy()
+
+    CP = CP/P
+    n = len(CP)
+    tickers = model_port.index
+
+    # Constraint Limits
+    currStats = Port_stats(model_port,weight_col='Par_no_default',format_output=False)
+    currStats = dict(zip(currStats.index,currStats.values))
+    #print(currStats)
+    
+    # this would be better as a dictionary in case the sheet changes order
+    Cash_to_Spend = otherConstraints['Cash to spend/raise']
+    PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
+    upperTradable = otherConstraints['Max trade size (on buys)']
+    #maxTrades = otherConstraints['Max # of new loans']   # not using atm
+    #print('Cash_to_Spend: ',Cash_to_Spend,' PBLim: ',PBLim,' upperTradable: ',upperTradable)
+
+    WASTest = keyConstraints['Spread']
+    WAScp = currStats['Min Floating Spread Test - no Libor Floors'][0]/100
+    WASdelta = WASTest - WAScp
+    WARFTest = keyConstraints['Adj. WARF NEW']
+    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)'][0]
+    WARFdelta = WARFTest - WARFcp
+    MRecTest = keyConstraints['Moodys Recovery Rate']
+    MRRcp = currStats['Min Moodys Recovery Rate Test'][0]/100
+    MRRdelta = MRecTest - MRRcp
+    RecoveryTest = keyConstraints['S&P Recovery Rate (AAA)']
+    RRcp = currStats['Min S&P Recovery Rate Class A-1a'][0]/100
+    RRdelta = RecoveryTest - RRcp
+    DiversityTest = -100
+    #print('WARFTest: ',WARFTest,' WARFcp: ',WARFcp,' RecoveryTest: ',RecoveryTest,' RRcp: ',RRcp)
+    #print('WASdelta: ',WASdelta,'WARFdelta: ',WARFdelta,' RRdelta: ',RRdelta)
+
+
+    SubC_Constr = (keyConstraints['C_or_Less'] - currStats['Percent CCC & lower'][0]/100)*(1+PBLim/P)
+    Lien_Constr = (keyConstraints['Lien'] - currStats['Percent 2nd Lien'][0]/100)*(1+PBLim/P)
+    Sub80_Constr = (keyConstraints['Sub80'] - currStats['Percent Sub80'][0]/100)*(1+PBLim/P)
+    Sub90_Constr = (keyConstraints['Sub90'] - currStats['Percent Sub90'][0]/100)*(1+PBLim/P)
+    Cov_Constr = (keyConstraints['CovLite'] - currStats['Percent CovLite'][0]/100)*(1+PBLim/P)
+
+    #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
+
+    upperTradable = 1e6
+# Convert to % weights instead of Par amounts for the solver
+# we can multiply back through at the end
+
+
+    UB = CP.copy()
+    LB = CP.copy()
+    for k  in range(n):
+        LB[k] = max(-CP[k],-upperTradable/P)  # no shorting and limited sell amt
+        UB[k] = upperTradable/P
+    
+    # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
+    # likewise loans to not buy x.upBound = 0, and to not sell x.lowBound = CP_i (or simply drop from DF)
+    if ~seedTrades.isnull().values.all():
+        for i in seedTrades.index:
+            idx = np.where(tickers == i)
+            LB[idx] = seedTrades.loc[i].values[0]   # RHS is good, LHS isn't indexed the same
+            UB[idx] = seedTrades.loc[i].values[0]
+
+    # Can't buy unAttractive loans
+    for i in np.where((model_port['Attractiveness']==1) | (model_port['Attractiveness']==2)):
+        UB[i] = 0
+        
+    # Can't sell very Attractive loans
+    #for i in model_port.loc[(model_port['Attractiveness']==5) ].index:
+    for i in np.where(model_port['Attractiveness']==5):
+        LB[i] = 0
+    
+    for i in range(n):
+        t = LpVariable("t_" + str(i), LB[i], UB[i]) 
+        t_vars.append(t)
+    
+        psi = LpVariable("psi_" + str(i), None, None)  # absolute value trick
+        psi_vars.append(psi)
+    
+        y = LpVariable("y_" + str(i), 0, 1, LpInteger) #set y in {0, 1}, indicator trick
+        y_vars.append(y)
+    
+    # add our objective to minimize psi & y, which is the number of trades
+    trading_model += lpSum(psi_vars) + lpSum(y_vars), "Objective"
+            
+    for i in range(n):
+        trading_model += psi_vars[i] >= -t_vars[i]
+        trading_model += psi_vars[i] >= t_vars[i]
+        trading_model += psi_vars[i] <= A * y_vars[i]
+    
+    # this is where our constraints come in
+    # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
+    trading_model += lpSum([ Bid[i]/100 * t_vars[i] for i in range(n)]) <= Cash_to_Spend/P , "Self-funding Bid"
+    trading_model += lpSum([ Ask[i]/100 * t_vars[i] for i in range(n)]) <= Cash_to_Spend/P , "Self-funding Ask"
+        #prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
+    # I think this needs to be Bid for CP and Ask for loan
+    trading_model += lpSum([((100-Bid[i])/100 * t_vars[i]) for i in range(n)]) >= PBLim/P, "Par Burn Limit"
+        
+    # still kind of weird that this is needed, must be in corner solution
+    trading_model += lpSum([((1+(100-Bid[i])/100) * t_vars[i]) for i in range(n)]) >= 0, "Must use cash raised"
+
+    # then the Test Condition Hard constriants, WARF,RR, Div, etc
+    trading_model += lpSum([WAS[i] * t_vars[i] for i in range(n)]) >= WASdelta, "WAS Test"
+    trading_model += lpSum([WARF[i] * t_vars[i] for i in range(n)]) <= WARFdelta, "WARF Test"
+    trading_model += lpSum([WARR[i] * t_vars[i] for i in range(n)]) >= RRdelta, "S&P Recovery Test"
+    trading_model += lpSum([WAMRR[i] * t_vars[i] for i in range(n)]) >= MRRdelta, "Moodys Recovery Test"
+    
+    
+    # need to derive a better representation of this constraint
+    trading_model += lpSum([mcDiv[i] * t_vars[i] for i in range(n)]) >= DiversityTest, "Diversity Test (simplified)"
+    
+    #
+    trading_model += lpSum([CovLite[i] * t_vars[i] for i in range(n)]) <= Cov_Constr, "Cov Test"
+    trading_model += lpSum([SubCCC[i] * t_vars[i] for i in range(n)]) <= SubC_Constr, "Sub C Test"
+    trading_model += lpSum([SubEighty[i] * t_vars[i] for i in range(n)]) <= Sub80_Constr, "Sub 80 Test"
+    trading_model += lpSum([SubNinety[i] * t_vars[i] for i in range(n)]) <= Sub90_Constr, "Sub 90 Test"
+    trading_model += lpSum([LienTwo[i] * t_vars[i] for i in range(n)]) <= Lien_Constr, "2nd Lien Test"
+
+    # The problem data is written to an .lp file
+    trading_model.writeLP(probName+".lp")
+
+
+    trading_model.solve(PULP_CBC_CMD( timeLimit = 120))
+
+    # The status of the solution is printed to the screen
+    print("Status:", LpStatus[trading_model.status])
+    
+    results = pd.Series([t_i.value() for t_i in t_vars], index = tickers)
+    print ("Number of trades: " + str(sum([y_i.value() for y_i in y_vars])))
+    print ("Value of trades: " + str(sum([t_i.value() for t_i in t_vars])))
+
+    #print "Turnover distance: " + str((w_target - (w_old + results)).abs().sum() / 2.)
+
+
+    # Each of the variables is printed with it's resolved optimum value
+    # so this would be new portfolio and new to derive trades by comparing to old
+    for idx, val in zip(results.index, results.values):
+        #print(idx, "=", val)
+        model_port.loc[idx,'NewPort'] = model_port.loc[idx,'Par_no_default'] + val*P * \
+            (1+(100-model_port.loc[idx,'Ask'])/100 if val > 0 else 
+            1+(100-model_port.loc[idx,'Bid'])/100 )
+        model_port.loc[idx,'CashDelta'] = val*P
+        model_port.loc[idx,'Trade'] = 'Buy' if val > 0 else 'Sale' if val < 0 else np.nan
+    return model_port
