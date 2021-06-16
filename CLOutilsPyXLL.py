@@ -1215,12 +1215,17 @@ def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probNam
 
     # Each of the variables is printed with it's resolved optimum value
     # so this would be new portfolio and new to derive trades by comparing to old
+       
     for idx, val in zip(results.index, results.values):
+        # I think this is wrong cause t_var is Par amounts, so cash = Par * ask/100
         #print(idx, "=", val)
-        model_port.loc[idx,'NewPort'] = model_port.loc[idx,'Par_no_default'] + val*P * \
-            (1+(100-model_port.loc[idx,'Ask'])/100 if val > 0 else 
-            1+(100-model_port.loc[idx,'Bid'])/100 )
-        model_port.loc[idx,'CashDelta'] = val*P
+        #model_port.loc[idx,'NewPort'] = model_port.loc[idx,'Par_no_default'] + val*P * \
+        #    (1+(100-model_port.loc[idx,'Ask'])/100 if val > 0 else 
+        #    1+(100-model_port.loc[idx,'Bid'])/100 )
+        #model_port.loc[idx,'CashDelta'] = val*P
+        model_port.loc[idx,'NewPort'] = model_port.loc[idx,'Par_no_default'] + val*P
+        model_port.loc[idx,'CashDelta'] = val*model_port.loc[idx,'Ask']/100*P if val > 0 else \
+            val*model_port.loc[idx,'Bid']/100*P
         model_port.loc[idx,'Trade'] = 'Buy' if val > 0 else 'Sale' if val < 0 else np.nan
     return model_port
 
@@ -1228,22 +1233,28 @@ def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probNam
 @xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
 def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probName= "CLO_Port_Builder",TimeOut=60):
 
-    trading_model = LpProblem(probName, LpMinimize)
+    CLO_model_port = LpProblem(probName, LpMaximize)
     t_vars = []
-    psi_vars = []
-    y_vars = []
-    A = 2
-
+    
     # Key Variables from our Constituent Universe
     # turns the DF columns into an array, so be careful
     # not to sort or modify the arrays or the indices
     # won't line up.  I prefer to use the Dict way of
     # setting constraints for this reason but this was
     # simpler in this case.
-    CP = model_port['Current Portfolio'].to_numpy()
-    P = model_port['Current Portfolio'].to_numpy().sum()
+    #CP = model_port['Current Portfolio'].to_numpy()
+    
+    # if everything traded at Par, Cash_to_Spend = P
+    P = otherConstraints['Target Portfolio Par'] # model_port['Current Portfolio'].to_numpy().sum()
+    Cash_to_Spend = otherConstraints['Additional Cash to spend/raise']
+    PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
+    
+    # Convert to % weights instead of Par amounts for the solver
+    # we can multiply back through at the end
+    
+    tickers = model_port.index    
+    
     Ask = model_port['Ask'].to_numpy()
-    Bid = model_port['Bid'].to_numpy()
     LienTwo = model_port['Lien'].to_numpy()
     CovLite = model_port['CovLite'].to_numpy()
     SubCCC    = model_port['C_or_Less'].to_numpy()
@@ -1256,56 +1267,28 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     WAMRR = model_port['Moodys Recovery Rate'].to_numpy()
     mcDiv = model_port['MC Div Score'].to_numpy()
 
-    CP = CP/P
-    n = len(CP)
-    tickers = model_port.index
 
-    # Constraint Limits
-    currStats = Port_stats(model_port,weight_col='Par_no_default',format_output=False)
-    currStats = dict(zip(currStats.index,currStats.values))
-    #print(currStats)
-    
-    # this would be better as a dictionary in case the sheet changes order
-    Cash_to_Spend = otherConstraints['Cash to spend/raise']
-    PBLim = otherConstraints['Par Build(+) Loss(-) Limit']
     upperTradable = otherConstraints['Max trade size (on buys)']
-    #maxTrades = otherConstraints['Max # of new loans']   # not using atm
     #print('Cash_to_Spend: ',Cash_to_Spend,' PBLim: ',PBLim,' upperTradable: ',upperTradable)
 
     WASTest = keyConstraints['Spread']
-    WAScp = currStats['Min Floating Spread Test - no Libor Floors'][0]/100
-    WASdelta = WASTest - WAScp
     WARFTest = keyConstraints['Adj. WARF NEW']
-    WARFcp = currStats['Max Moodys Rating Factor Test (NEW WARF)'][0]
-    WARFdelta = WARFTest - WARFcp
     MRecTest = keyConstraints['Moodys Recovery Rate']
-    MRRcp = currStats['Min Moodys Recovery Rate Test'][0]/100
-    MRRdelta = MRecTest - MRRcp
     RecoveryTest = keyConstraints['S&P Recovery Rate (AAA)']
-    RRcp = currStats['Min S&P Recovery Rate Class A-1a'][0]/100
-    RRdelta = RecoveryTest - RRcp
-    DiversityTest = -100
-    #print('WARFTest: ',WARFTest,' WARFcp: ',WARFcp,' RecoveryTest: ',RecoveryTest,' RRcp: ',RRcp)
-    #print('WASdelta: ',WASdelta,'WARFdelta: ',WARFdelta,' RRdelta: ',RRdelta)
+    DiversityTest = keyConstraints['Moodys Diversity Test']
 
-
-    SubC_Constr = (keyConstraints['C_or_Less'] - currStats['Percent CCC & lower'][0]/100)*(1+PBLim/P)
-    Lien_Constr = (keyConstraints['Lien'] - currStats['Percent 2nd Lien'][0]/100)*(1+PBLim/P)
-    Sub80_Constr = (keyConstraints['Sub80'] - currStats['Percent Sub80'][0]/100)*(1+PBLim/P)
-    Sub90_Constr = (keyConstraints['Sub90'] - currStats['Percent Sub90'][0]/100)*(1+PBLim/P)
-    Cov_Constr = (keyConstraints['CovLite'] - currStats['Percent CovLite'][0]/100)*(1+PBLim/P)
+    SubC_Constr = (keyConstraints['C_or_Less']) #*(P)
+    Lien_Constr = (keyConstraints['Lien']) #*(P)
+    Sub80_Constr = (keyConstraints['Sub80']) #*(P)
+    Sub90_Constr = (keyConstraints['Sub90']) #*(P)
+    Cov_Constr = (keyConstraints['CovLite']) #*(P)
 
     #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
-
-    
-# Convert to % weights instead of Par amounts for the solver
-# we can multiply back through at the end
-
 
     UB = CP.copy()
     LB = CP.copy()
     for k  in range(n):
-        LB[k] = max(-CP[k],-upperTradable/P)  # no shorting and limited sell amt
+        LB[k] = 0  # no shorting and limited sell amt
         UB[k] = upperTradable/P
     
     # seed trades should be set like x.lowBound = seedAmt, where x is the LXID variable (could set lb=ub=seedAmt)
@@ -1319,66 +1302,45 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     # Can't buy unAttractive loans
     for i in np.where((model_port['Attractiveness']==1) | (model_port['Attractiveness']==2)):
         UB[i] = 0
-        
-    # Can't sell very Attractive loans
-    #for i in model_port.loc[(model_port['Attractiveness']==5) ].index:
-    for i in np.where(model_port['Attractiveness']==5):
-        LB[i] = 0
-    
-    for i in range(n):
-        t = LpVariable("t_" + str(i), LB[i], UB[i]) 
-        t_vars.append(t)
-    
-        psi = LpVariable("psi_" + str(i), None, None)  # absolute value trick
-        psi_vars.append(psi)
-    
-        y = LpVariable("y_" + str(i), 0, 1, LpInteger) #set y in {0, 1}, indicator trick
-        y_vars.append(y)
-    
+     
     # add our objective to minimize psi & y, which is the number of trades
-    trading_model += lpSum(psi_vars) + lpSum(y_vars), "Objective"
+    CLO_model_port += lpSum([ D[i] * t_vars[i] for i in range(n)]), "Desirability Objective"
             
-    for i in range(n):
-        trading_model += psi_vars[i] >= -t_vars[i]
-        trading_model += psi_vars[i] >= t_vars[i]
-        trading_model += psi_vars[i] <= A * y_vars[i]
     
-    # this is where our constraints come in
     # First the practical constraints are added to 'prob' (self-funding, parburn, etc)
-    trading_model += lpSum([ Bid[i]/100 * t_vars[i] for i in range(n)]) <= Cash_to_Spend/P , "Self-funding Bid"
-    trading_model += lpSum([ Ask[i]/100 * t_vars[i] for i in range(n)]) <= Cash_to_Spend/P , "Self-funding Ask"
+    CLO_model_port += lpSum([ Ask[i]/100 * t_vars[i] for i in range(n)]) <= 1+ Cash_to_Spend/P , "Self-funding Ask"
         #prob += lpSum([ Mid[i]/100 * t for t, i in zip(trades,Trades)]) <= Cash_to_Spend , "Self-funding Mid"
     # I think this needs to be Bid for CP and Ask for loan
-    trading_model += lpSum([((100-Bid[i])/100 * t_vars[i]) for i in range(n)]) >= PBLim/P, "Par Burn Limit"
+    CLO_model_port += lpSum([((100-Ask[i])/100 * t_vars[i]) for i in range(n)]) >= -PBLim/P, "Par Burn Limit"
         
-    # still kind of weird that this is needed, must be in corner solution
-    trading_model += lpSum([((1+(100-Bid[i])/100) * t_vars[i]) for i in range(n)]) >= 0, "Must use cash raised"
+    # The sum of all Par amounts approaches the Target Par for the Portfolio minus allowed slippage
+    CLO_model_port += lpSum([t_vars[i] for i in range(n)]) >= 1-PBLim/P, "Sum of Par near Target Par"
 
     # then the Test Condition Hard constriants, WARF,RR, Div, etc
-    trading_model += lpSum([WAS[i] * t_vars[i] for i in range(n)]) >= WASdelta, "WAS Test"
-    trading_model += lpSum([WARF[i] * t_vars[i] for i in range(n)]) <= WARFdelta, "WARF Test"
-    trading_model += lpSum([WARR[i] * t_vars[i] for i in range(n)]) >= RRdelta, "S&P Recovery Test"
-    trading_model += lpSum([WAMRR[i] * t_vars[i] for i in range(n)]) >= MRRdelta, "Moodys Recovery Test"
+    CLO_model_port += lpSum([WAS[i] * t_vars[i] for i in range(n)]) >= WASTest, "WAS Test"
+    CLO_model_port += lpSum([WARF[i] * t_vars[i] for i in range(n)]) <= WARFTest, "WARF Test"
+    CLO_model_port += lpSum([WARR[i] * t_vars[i] for i in range(n)]) >= RecoveryTest, "S&P Recovery Test"
+    CLO_model_port += lpSum([WAMRR[i] * t_vars[i] for i in range(n)]) >= MRecTest, "Moodys Recovery Test"
     
     
     # need to derive a better representation of this constraint
-    trading_model += lpSum([mcDiv[i] * t_vars[i] for i in range(n)]) >= DiversityTest, "Diversity Test (simplified)"
+    #CLO_model_port += lpSum([mcDiv[i] * t_vars[i] for i in range(n)]) >= DiversityTest, "Diversity Test"
     
     #
-    trading_model += lpSum([CovLite[i] * t_vars[i] for i in range(n)]) <= Cov_Constr, "Cov Test"
-    trading_model += lpSum([SubCCC[i] * t_vars[i] for i in range(n)]) <= SubC_Constr, "Sub C Test"
-    trading_model += lpSum([SubEighty[i] * t_vars[i] for i in range(n)]) <= Sub80_Constr, "Sub 80 Test"
-    trading_model += lpSum([SubNinety[i] * t_vars[i] for i in range(n)]) <= Sub90_Constr, "Sub 90 Test"
-    trading_model += lpSum([LienTwo[i] * t_vars[i] for i in range(n)]) <= Lien_Constr, "2nd Lien Test"
+    CLO_model_port += lpSum([CovLite[i] * t_vars[i] for i in range(n)]) <= Cov_Constr, "Cov Test"
+    CLO_model_port += lpSum([SubCCC[i] * t_vars[i] for i in range(n)]) <= SubC_Constr, "Sub C Test"
+    CLO_model_port += lpSum([SubEighty[i] * t_vars[i] for i in range(n)]) <= Sub80_Constr, "Sub 80 Test"
+    CLO_model_port += lpSum([SubNinety[i] * t_vars[i] for i in range(n)]) <= Sub90_Constr, "Sub 90 Test"
+    CLO_model_port += lpSum([LienTwo[i] * t_vars[i] for i in range(n)]) <= Lien_Constr, "2nd Lien Test"
 
     # The problem data is written to an .lp file
-    trading_model.writeLP(probName+".lp")
+    CLO_model_port.writeLP(probName+".lp")
 
 
-    trading_model.solve(PULP_CBC_CMD( timeLimit = TimeOut))
+    CLO_model_port.solve(PULP_CBC_CMD( timeLimit = TimeOut))
 
     # The status of the solution is printed to the screen
-    print("Status:", LpStatus[trading_model.status])
+    print("Status:", LpStatus[CLO_model_port.status])
     
     results = pd.Series([t_i.value() for t_i in t_vars], index = tickers)
     print ("Number of trades: " + str(sum([y_i.value() for y_i in y_vars])))
@@ -1391,9 +1353,8 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     # so this would be new portfolio and new to derive trades by comparing to old
     for idx, val in zip(results.index, results.values):
         #print(idx, "=", val)
-        model_port.loc[idx,'NewPort'] = model_port.loc[idx,'Par_no_default'] + val*P * \
-            (1+(100-model_port.loc[idx,'Ask'])/100 if val > 0 else 
-            1+(100-model_port.loc[idx,'Bid'])/100 )
-        model_port.loc[idx,'CashDelta'] = val*P
-        model_port.loc[idx,'Trade'] = 'Buy' if val > 0 else 'Sale' if val < 0 else np.nan
+        model_port.loc[idx,'Current Portfolio'] = val*P #* \
+        #    (1+(100-model_port.loc[idx,'Ask'])/100 
+        model_port.loc[idx,'CashDelta'] = val*P * (1+(100+model_port.loc[idx,'Ask'])/100) 
+        model_port.loc[idx,'Trade'] = 'Buy' if val > 0 else np.nan
     return model_port
