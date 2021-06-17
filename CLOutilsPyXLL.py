@@ -1051,7 +1051,7 @@ def convert_to_binary(model_df):
     model_df['Sub90'] = model_df['Bid'].apply(lambda x: 1 if x < 90 else 0)
     return model_df
 ############################################################################################
-@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str, int: object")
 def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probName= "Trade_Minimization_Problem",TimeOut=60):
 
     trading_model = LpProblem(probName, LpMinimize)
@@ -1060,6 +1060,7 @@ def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probNam
     y_vars = []
     A = 2
 
+    seedTrades.dropna(how='all',inplace=True)
     # Key Variables from our Constituent Universe
     # turns the DF columns into an array, so be careful
     # not to sort or modify the arrays or the indices
@@ -1139,8 +1140,8 @@ def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probNam
     if ~seedTrades.isnull().values.all():
         for i in seedTrades.index:
             idx = np.where(tickers == i)
-            LB[idx] = seedTrades.loc[i].values[0]   # RHS is good, LHS isn't indexed the same
-            UB[idx] = seedTrades.loc[i].values[0]
+            LB[idx] = seedTrades.loc[i].values[1]   # RHS is good, LHS isn't indexed the same
+            UB[idx] = seedTrades.loc[i].values[1]
 
     # Can't buy unAttractive loans
     for i in np.where((model_port['Attractiveness']==1) | (model_port['Attractiveness']==2)):
@@ -1230,7 +1231,7 @@ def TradeOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probNam
     return model_port
 
 ############################################################################################
-@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str: object")
+@xl_func("dataframe<index=True>, dict<str, float>, dict<str, int>, dataframe<index=True>, str, int: object")
 def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probName= "CLO_Port_Builder",TimeOut=60):
 
     CLO_model_port = LpProblem(probName, LpMaximize)
@@ -1284,9 +1285,9 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     Cov_Constr = (keyConstraints['CovLite']) #*(P)
 
     #print('Lien: ',Lien_Constr,' Cov: ',Cov_Constr,' SubC: ',SubC_Constr,' Sub80: ',Sub80_Constr)
-
-    UB = CP.copy()
-    LB = CP.copy()
+    n = len(D)
+    UB = D.copy()
+    LB = D.copy()
     for k  in range(n):
         LB[k] = 0  # no shorting and limited sell amt
         UB[k] = upperTradable/P
@@ -1303,6 +1304,11 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     for i in np.where((model_port['Attractiveness']==1) | (model_port['Attractiveness']==2)):
         UB[i] = 0
      
+    for i in range(n):
+        t = LpVariable("t_" + str(i), LB[i], UB[i]) 
+        t_vars.append(t)
+
+    
     # add our objective to minimize psi & y, which is the number of trades
     CLO_model_port += lpSum([ D[i] * t_vars[i] for i in range(n)]), "Desirability Objective"
             
@@ -1343,7 +1349,6 @@ def CLOPortOptimizer(model_port,keyConstraints,otherConstraints,seedTrades,probN
     print("Status:", LpStatus[CLO_model_port.status])
     
     results = pd.Series([t_i.value() for t_i in t_vars], index = tickers)
-    print ("Number of trades: " + str(sum([y_i.value() for y_i in y_vars])))
     print ("Value of trades: " + str(sum([t_i.value() for t_i in t_vars])))
 
     #print "Turnover distance: " + str((w_target - (w_old + results)).abs().sum() / 2.)
