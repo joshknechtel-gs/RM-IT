@@ -75,6 +75,43 @@ coverage_map = {'Interest Coverage Test - Class A':'Interest Coverage Test - Cla
        'Class A-1 Overcollateralization Ratio Test [Event of Default - Section 5.1(g)]':
                'Overcollateralization Ratio Test - Event of Default'}
 
+con_stats = ['Cov-Lite Loans','Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+',
+    'Moody\'s Rating <= Caa1','S&P Rating <= CCC+']
+
+con_stats_map = {'Cov-Lite Loans':'Cov-Lite Loans','Moody\'s Default Probability Rating Of Caa1 or Below':
+                 'Moody\'s Rating <= Caa1','Moody\'s Default Probability Rating Of Caa1 or Below and/or S&P Rating of CCC+ or Below':
+                 'Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+',
+                 'Moody\'s Rating <= Caa1':'Moody\'s Rating <= Caa1','S&P Rating <= CCC+':'S&P Rating <= CCC+',
+                 'S&P Rating of CCC+ or Below':'S&P Rating <= CCC+'}
+
+all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating Spread Test',
+       'Min Floating Spread Test - With Libor Floors':'Min Floating Spread Test - With Libor Floors',
+       'Minimum Weighted Average Coupon Test':'Minimum Weighted Average Coupon Test',
+       'Max Moodys Rating Factor Test (NEW WARF)':'Max Moodys Rating Factor Test (NEW WARF)',
+       'Max Moodys Rating Factor Test (Orig WARF)':'Maximum Moody\'s Rating Factor Test',
+       'Min Moodys Recovery Rate Test':'Minimum Weighted Average Moody’s Recovery Rate Test', 
+       'Min S&P Recovery Rate Class A-1a':'Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
+       'Moodys Diversity Test':'Moody\'s Diversity Test', 
+       'Weighted Average Life Test':'Weighted Average Life',
+       'Percent Caa & lower':'Moody\'s Rating <= Caa1', 
+       'Percent CCC & lower':'S&P Rating <= CCC+', 
+       'Percent 2nd Lien':'Percent 2nd Lien',
+       'Total Portfolio Par (excl. Defaults)':'Total Portfolio Par (excl. Defaults)',
+       'Class A/B Overcollateralization Ratio':'Overcollateralization Ratio Test - Class A/B',
+       'Class C Overcollateralization Ratio':'Overcollateralization Ratio Test - Class C',
+       'Class D Overcollateralization Ratio':'Overcollateralization Ratio Test - Class D',
+       'Class E Overcollateralization Ratio':'Overcollateralization Ratio Test - Class E',
+       'Reinvestment Overcollateralization Ratio':'Reinvestment Overcollateralization Test',
+       'S&P Weighted Average Rating Factor (SP WARF)':'S&P Weighted Average Rating Factor (SP WARF)',
+       'Default Rate Dispersion (DRD)':'Default Rate Dispersion (DRD)', 
+       'Obligor Diversity Measure (ODM)':'Obligor Diversity Measure (ODM)',
+       'Industry Diversity Measure (IDM)':'Industry Diversity Measure (IDM)', 
+       'Regional Diversity Measure (RDM)':'Regional Diversity Measure (RDM)',
+       'Weighted Average Life (WAL)':'Weighted Average Life (WAL)', 
+       'Break-Even Default Rate (BDR)':'Break-Even Default Rate (BDR)',
+       'Adjusted Break-Even Default Rate (Adj BDR)':'Adjusted Break-Even Default Rate (Adj BDR)',
+       'Scenario Default Rate (SDR)':'Scenario Default Rate (SDR)'}
+
 
 #################################################################################
 ## These functions have been modified vis a vis CLOUtils due to differences in
@@ -900,11 +937,11 @@ def prepost_Port_stats(model_df, cols):
     return cstats
 
 #################################################################################
-def all_stats_all_clos(model_df, cols, clo_dict):
+def all_stats_all_clos(model_df, cols, clo_dict, format_output=False):
 
     mask = abs(model_df[cols[0]]) > 0
-    cstats = Port_stats(model_df.loc[mask], cols[0])
-    ocstats = Overcollateralization_Stats(model_df.loc[mask],cols[0],clo_dict)
+    cstats = Port_stats(model_df.loc[mask], cols[0], format_output)
+    ocstats = Overcollateralization_Stats(model_df.loc[mask],cols[0],clo_dict,format_output)
     sstats = SP_CDO_Monitor_Test(model_df.loc[mask],cols[0])
     cstats = cstats.append(ocstats)
     cstats = cstats.append(sstats)
@@ -942,53 +979,29 @@ def build_trigger_tables(trigger_df,clo_list,stats_list):
 #################################################################################
 def get_triggers(filepathT):
     triggers = pd.read_excel(filepathT)
+    ## normalize some of the test names
+    triggers.loc[triggers['TestType']=='Coverage Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Coverage Test','Title'].map(coverage_map)
+    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].str.lstrip("(0123456789abc)/ ")
+    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].map(con_stats_map)
     return triggers
 
 #################################################################################
 def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
-    all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating Spread Test',
-       'Min Floating Spread Test - With Libor Floors':'Min Floating Spread Test - With Libor Floors',
-       'Minimum Weighted Average Coupon Test':'Minimum Weighted Average Coupon Test',
-       'Max Moodys Rating Factor Test (NEW WARF)':'Max Moodys Rating Factor Test (NEW WARF)',
-       'Max Moodys Rating Factor Test (Orig WARF)':'Maximum Moody\'s Rating Factor Test',
-       'Min Moodys Recovery Rate Test':'Minimum Weighted Average Moody’s Recovery Rate Test', 
-       'Min S&P Recovery Rate Class A-1a':'Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
-       'Moodys Diversity Test':'Moody\'s Diversity Test', 
-       'Weighted Average Life Test':'Weighted Average Life',
-       'Percent Caa & lower':'Percent Caa & lower', 
-       'Percent CCC & lower':'Percent CCC & lower', 
-       'Percent 2nd Lien':'Percent 2nd Lien',
-       'Total Portfolio Par (excl. Defaults)':'Total Portfolio Par (excl. Defaults)',
-       'Class A/B Overcollateralization Ratio':'Overcollateralization Ratio Test - Class A/B',
-       'Class C Overcollateralization Ratio':'Overcollateralization Ratio Test - Class C',
-       'Class D Overcollateralization Ratio':'Overcollateralization Ratio Test - Class D',
-       'Class E Overcollateralization Ratio':'Overcollateralization Ratio Test - Class E',
-       'Reinvestment Overcollateralization Ratio':'Reinvestment Overcollateralization Test',
-       'S&P Weighted Average Rating Factor (SP WARF)':'S&P Weighted Average Rating Factor (SP WARF)',
-       'Default Rate Dispersion (DRD)':'Default Rate Dispersion (DRD)', 
-       'Obligor Diversity Measure (ODM)':'Obligor Diversity Measure (ODM)',
-       'Industry Diversity Measure (IDM)':'Industry Diversity Measure (IDM)', 
-       'Regional Diversity Measure (RDM)':'Regional Diversity Measure (RDM)',
-       'Weighted Average Life (WAL)':'Weighted Average Life (WAL)', 
-       'Break-Even Default Rate (BDR)':'Break-Even Default Rate (BDR)',
-       'Adjusted Break-Even Default Rate (Adj BDR)':'Adjusted Break-Even Default Rate (Adj BDR)',
-       'Scenario Default Rate (SDR)':'Scenario Default Rate (SDR)'}
 
     ## Get All the stats for all CLOs
-    all_df = all_stats_all_clos(df, cols, clo_dict)
+    all_df = all_stats_all_clos(df, cols, clo_dict, format_output=False)
     all_df.index = all_df.index.map(all_stats_map)
     
     ## Triggers
     triggers = get_triggers(filepathT)
     clo_list = triggers['CLOName'].unique()
     clo_list = sorted(clo_list)
-    clo_list = clo_list[11:]+clo_list[0:10]
+    clo_list = clo_list[11:]+clo_list[0:11]
     
-    ## normalize some of the test names
-    triggers.loc[triggers['TestType']=='Coverage Test','Title'] = \
-        triggers.loc[triggers['TestType']=='Coverage Test','Title'].map(coverage_map)
-
-    stats_list = qstats_list + coverage_stats  # all the triggers
+    stats_list = qstats_list + coverage_stats + con_stats # all the triggers
     
     trigger_table = build_trigger_tables(triggers,clo_list,stats_list)
     
