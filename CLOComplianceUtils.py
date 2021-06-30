@@ -10,6 +10,12 @@ libor = 0.0020
 dict_2020_20 = {'Class A-1 Notes':240e6,'Class A-2 Notes':16e6,'Class B-1 Notes':39e6,'Class B-2 Notes':9e6,
                'Class C Notes':24e6,'Class D-1 Notes':16e6,'Class D-2 Notes':8e6,'Class E Notes':12e6}
 
+clo_list = ['CLO 4', 'CLO 5', 'CLO 6',
+       'CLO 7', 'CLO 8R', 'CLO 9', 'CLO 10', 'CLO 11',
+       'CLO 12', 'CLO 13', 'CLO 14', 'CLO 15',
+       'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19',
+       'CLO 20', 'CLO 21']
+
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/CLO Reports/'
 file = 'Master Position Report.xlsx'
 filepath = path + file
@@ -39,7 +45,6 @@ coverage_stats = ['Interest Coverage Test - Class A',
        'Overcollateralization Ratio Test - Class D',
        'Overcollateralization Ratio Test - Class E',
        'Reinvestment Overcollateralization Test',
-       'Overcollateralization Ratio Test - Class A1 [Event of Default - Section 5.1(g)]',
        'Overcollateralization Ratio Test - Event of Default']
        
 coverage_map = {'Interest Coverage Test - Class A':'Interest Coverage Test - Class A',
@@ -269,24 +274,24 @@ def DataLabelMap(df):
         'S&P Issuer Watch': 'S&P Issuer Watch',
         'S&P Recovery': 'S&P Recovery',
         'Agent Bank': 'Agent Bank',
-        'OCP CLO 2013-4, Ltd.': 'CLO 2013-4',
-        'OCP CLO 2014-5, Ltd.': 'CLO 2014-5',
-        'OCP CLO 2014-6, Ltd.': 'CLO 2014-6',
-        'OCP CLO 2014-7, Ltd.': 'CLO 2014-7',
-        'OCP CLO 2020-8R, Ltd.': 'CLO 2020-8R',
-        'OCP CLO 2015-9, Ltd.': 'CLO 2015-9',
-        'OCP CLO 2015-10, Ltd.': 'CLO 2015-10',
-        'OCP CLO 2016-11, Ltd.': 'CLO 2016-11',
-        'OCP CLO 2016-12, Ltd.': 'CLO 2016-12',
-        'OCP CLO 2017-13, Ltd.': 'CLO 2017-13',
-        'OCP CLO 2017-14, Ltd.': 'CLO 2017-14',
-        'OCP CLO 2018-15, Ltd.': 'CLO 2018-15',
-        'OCP CLO 2019-16, Ltd.': 'CLO 2019-16',
-        'OCP CLO 2019-17, Ltd': 'CLO 2019-17',
-        'OCP CLO 2020-18, Ltd.': 'CLO 2020-18',
-        'OCP CLO 2020-19, Ltd.': 'CLO 2020-19',
-        'OCP CLO 2020-20, Ltd.': 'CLO 2020-20',
-        'OCP CLO 2021-21 Ltd.': 'CLO 2021-21',
+        'OCP CLO 2013-4, Ltd.': 'CLO 4',
+        'OCP CLO 2014-5, Ltd.': 'CLO 5',
+        'OCP CLO 2014-6, Ltd.': 'CLO 6',
+        'OCP CLO 2014-7, Ltd.': 'CLO 7',
+        'OCP CLO 2020-8R, Ltd.': 'CLO 8R',
+        'OCP CLO 2015-9, Ltd.': 'CLO 9',
+        'OCP CLO 2015-10, Ltd.': 'CLO 10',
+        'OCP CLO 2016-11, Ltd.': 'CLO 11',
+        'OCP CLO 2016-12, Ltd.': 'CLO 12',
+        'OCP CLO 2017-13, Ltd.': 'CLO 13',
+        'OCP CLO 2017-14, Ltd.': 'CLO 14',
+        'OCP CLO 2018-15, Ltd.': 'CLO 15',
+        'OCP CLO 2019-16, Ltd.': 'CLO 16',
+        'OCP CLO 2019-17, Ltd': 'CLO 17',
+        'OCP CLO 2020-18, Ltd.': 'CLO 18',
+        'OCP CLO 2020-19, Ltd.': 'CLO 19',
+        'OCP CLO 2020-20, Ltd.': 'CLO 20',
+        'OCP CLO 2021-21 Ltd.': 'CLO 21',
         'Current Global Amount Outstanding': 'Current Global Amount Outstanding',
         'Moody\'s Industry': 'Moodys Industry',
         'S&P Industry': 'S&P Industry',
@@ -422,7 +427,7 @@ def weighted_average(model_df,cols):
     wa = (model_df[cols[0]]*model_df[cols[1]]).sum()/model_df[cols[0]].sum()
     return wa
 #################################################################################
-def SP_CDO_Monitor_Test(clo_df,col='CLO 2020-20'):
+def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
     #C0 = 0.185893082941552
     #C1 = 3.70021989750327
     #C2 = 0.881097473356921
@@ -762,7 +767,7 @@ def Weighted_Average_Coupon(clo_df,col):
     The WAC is probably closer to the WAS
     """
     mask = (clo_df['Asset Type']=='Bond')
-    WAC_stat = weighted_average(clo_df.loc[mask],['CLO 2020-20','All In Rate'])
+    WAC_stat = weighted_average(clo_df.loc[mask],[col,'All In Rate'])
     
     return WAC_stat
 
@@ -771,7 +776,7 @@ def Excess_Weighted_Average_FloatSpread(clo_df,col,minFS):
     """
     This doesn't seem correct.  Is it units or fail?
     """
-    mask = (clo_df['Asset Type']!='Bond') & (clo_df['CLO 2020-20'] > 0) & (~clo_df['Spread'].isna())
+    mask = (clo_df['Asset Type']!='Bond') & (clo_df[col] > 0) & (~clo_df['Spread'].isna())
     float_Par = clo_df.loc[mask,col].sum()
     
     mask = (clo_df['Asset Type']=='Bond')
@@ -831,12 +836,12 @@ def percentage_C(model_df,weight_col='Par_no_default'):
     perC = model_df.loc[model_df['Adjusted Moodys Rating'].str.match('C'),[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 #################################################################################
-def percentage_Caa(model_df,weight_col='CLO 2020-20'):  
+def percentage_Caa(model_df,weight_col='CLO 20'):  
     
     perC = model_df.loc[model_df['MDPR'].str.match('C'),[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 #################################################################################
-def percentage_CCC(model_df,weight_col='CLO 2020-20'):  
+def percentage_CCC(model_df,weight_col='CLO 20'):  
     mask = (model_df['S&P Issuer Rating']=='CC') |  (model_df['S&P Issuer Rating']=='C') |  \
            (model_df['S&P Issuer Rating']=='D') | (model_df['S&P Issuer Rating']=='SD') | \
            (model_df['S&P Issuer Rating']=='NR') #|  (clo_df['S&P Issuer Rating']=='D')
@@ -934,7 +939,62 @@ def build_trigger_tables(trigger_df,clo_list,stats_list):
     return trigger_table
 #################################################################################
 #def master_test_stats(master_df,weight_col='CLO 2020-20',master_dict):
+#################################################################################
+def get_triggers(filepathT):
+    triggers = pd.read_excel(filepathT)
+    return triggers
+
+#################################################################################
+def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
+    all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating Spread Test',
+       'Min Floating Spread Test - With Libor Floors':'Min Floating Spread Test - With Libor Floors',
+       'Minimum Weighted Average Coupon Test':'Minimum Weighted Average Coupon Test',
+       'Max Moodys Rating Factor Test (NEW WARF)':'Max Moodys Rating Factor Test (NEW WARF)',
+       'Max Moodys Rating Factor Test (Orig WARF)':'Maximum Moody\'s Rating Factor Test',
+       'Min Moodys Recovery Rate Test':'Minimum Weighted Average Moody’s Recovery Rate Test', 
+       'Min S&P Recovery Rate Class A-1a':'Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
+       'Moodys Diversity Test':'Moody\'s Diversity Test', 
+       'Weighted Average Life Test':'Weighted Average Life',
+       'Percent Caa & lower':'Percent Caa & lower', 
+       'Percent CCC & lower':'Percent CCC & lower', 
+       'Percent 2nd Lien':'Percent 2nd Lien',
+       'Total Portfolio Par (excl. Defaults)':'Total Portfolio Par (excl. Defaults)',
+       'Class A/B Overcollateralization Ratio':'Overcollateralization Ratio Test - Class A/B',
+       'Class C Overcollateralization Ratio':'Overcollateralization Ratio Test - Class C',
+       'Class D Overcollateralization Ratio':'Overcollateralization Ratio Test - Class D',
+       'Class E Overcollateralization Ratio':'Overcollateralization Ratio Test - Class E',
+       'Reinvestment Overcollateralization Ratio':'Reinvestment Overcollateralization Test',
+       'S&P Weighted Average Rating Factor (SP WARF)':'S&P Weighted Average Rating Factor (SP WARF)',
+       'Default Rate Dispersion (DRD)':'Default Rate Dispersion (DRD)', 
+       'Obligor Diversity Measure (ODM)':'Obligor Diversity Measure (ODM)',
+       'Industry Diversity Measure (IDM)':'Industry Diversity Measure (IDM)', 
+       'Regional Diversity Measure (RDM)':'Regional Diversity Measure (RDM)',
+       'Weighted Average Life (WAL)':'Weighted Average Life (WAL)', 
+       'Break-Even Default Rate (BDR)':'Break-Even Default Rate (BDR)',
+       'Adjusted Break-Even Default Rate (Adj BDR)':'Adjusted Break-Even Default Rate (Adj BDR)',
+       'Scenario Default Rate (SDR)':'Scenario Default Rate (SDR)'}
+
+    ## Get All the stats for all CLOs
+    all_df = all_stats_all_clos(df, cols, clo_dict)
+    all_df.index = all_df.index.map(all_stats_map)
     
+    ## Triggers
+    triggers = get_triggers(filepathT)
+    clo_list = triggers['CLOName'].unique()
+    clo_list = sorted(clo_list)
+    clo_list = clo_list[11:]+clo_list[0:10]
+    
+    ## normalize some of the test names
+    triggers.loc[triggers['TestType']=='Coverage Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Coverage Test','Title'].map(coverage_map)
+
+    stats_list = qstats_list + coverage_stats  # all the triggers
+    
+    trigger_table = build_trigger_tables(triggers,clo_list,stats_list)
+    
+    master_test_df = pd.concat([all_df,trigger_table],axis=1,keys=['Result','Trigger']).swaplevel(0,1,axis=1).sort_index(axis=1)
+    
+    return master_test_df
 #################################################################################
 ## This was older code before the files changed...delete later if not needed
 #################################################################################
