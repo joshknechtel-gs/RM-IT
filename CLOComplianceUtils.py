@@ -14,7 +14,7 @@ clo_list = ['CLO 4', 'CLO 5', 'CLO 6',
        'CLO 7', 'CLO 8R', 'CLO 9', 'CLO 10', 'CLO 11',
        'CLO 12', 'CLO 13', 'CLO 14', 'CLO 15',
        'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19',
-       'CLO 20', 'CLO 21']
+       'CLO 20', 'CLO 21']  # 'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4'
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/CLO Reports/'
 file = 'Master Position Report.xlsx'
@@ -119,7 +119,7 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
 ## these are "forked" to get going quickly, and the optimizer's version will
 ## need to work with these versions going forward
 #################################################################################
-def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
+def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     """
     Arg in:
         model_df
@@ -157,7 +157,7 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
         'Percent 2nd Lien',
     #    'Percent Sub80',
     #    'Percent Sub90',
-    #    'Percent CovLite',
+        'Percent CovLite',
     #    'Pot Par B/L Sale',
     #    'Pot Par B/L Buy',
     #    'Pot Par B/L Total',
@@ -217,7 +217,7 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
     
     #Port_stats_df.loc['Percent Sub90',weight_col] = percentage_SubNinety(model_df, weight_col)*100
     
-    #Port_stats_df.loc['Percent CovLite',weight_col] = percentage_CovLite(model_df, weight_col)*100
+    Port_stats_df.loc['Percent CovLite',weight_col] = percentage_CovLite(model_df, weight_col)*100
     Port_stats_df.loc['Total Portfolio Par (excl. Defaults)',weight_col] = model_df[weight_col].sum()
 
     
@@ -253,8 +253,8 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=True):
         #    Port_stats_df.loc['Percent Sub80'].apply('{:.1f}%'.format)
         #Port_stats_df.loc['Percent Sub90'] = \
         #    Port_stats_df.loc['Percent Sub90'].apply('{:.1f}%'.format)
-        #Port_stats_df.loc['Percent CovLite'] = \
-        #    Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
+        Port_stats_df.loc['Percent CovLite'] = \
+            Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
         Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
             Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
         
@@ -464,13 +464,95 @@ def weighted_average(model_df,cols):
     wa = (model_df[cols[0]]*model_df[cols[1]]).sum()/model_df[cols[0]].sum()
     return wa
 #################################################################################
+def SP_CDO_Coefs(col='CLO 20'):
+    """
+    Looks up the coefficients in the dict table and returns the 3 as a float array
+    """
+        
+    clo_coefs = {'CLO 18': [0.121609,3.706211,1.025031],
+                'CLO 16': [0.101745,4.769688,0.962975],
+                'CLO 19': [0.097805,4.15832,1.071661],
+                'CLO 17': [0.061931,4.266469,1.104848],
+                'CLO 20': [0.109706,4.140929,1.064031],
+                'CLO 8R': [0.106769,3.967347,0.997703],
+                'CLO 14': [0.093957,4.215527,1.086073],
+                'CLO 13': [0.066717,4.243131,1.11317],
+                'CLO 15': [0.065108,4.620284,1.048429],
+                'CLO 10': [-0.008128,3.480512,1.260735],
+                'CLO 11': [0.059116,4.481791,1.10217],
+                'CLO 12': [-0.046444,3.833393,1.107043],
+                'CLO 7': [0.017043,4.541246,1.067143],
+                'CLO 6': [0.05869,4.267761,1.099711],
+                'CLO 5': [0.060439,4.275955,1.14419],
+                'EUR 1': [0.185893082941552,3.70021989750327,0.881097473356921],
+                'EUR 2': [0.206296268943602,4.05917015316102,0.947621203737026],
+                'EUR 3': [0.191101158723369,3.39938112043418,0.952667210171681],
+                'EUR 4': [np.nan,np.nan,np.nan]}
+    
+    return clo_coefs[col]
+#################################################################################
+def SP_CDO_Type(col='CLO 20'):
+    """
+    There seems to be two types of BDR test stats
+    Type II: 0.247621 + (SPWARF/9162.65) – (DRD/16757.2) – (ODM/7677.8) – (IDM/2177.56) – (RDM/34.0948) + (WAL/27.3896)
+    Type I: 0.329915 + (1.210322 * EPDR) – (0.586627 * DRD) + (2.538684 /ODM) + (0.216729 / IDM) + (0.0575539 / RDM) – (0.0136662 * WAL)
+    """
+        
+    clo_types = {'CLO 18': 'Type II',
+                'CLO 16': 'Type II',
+                'CLO 19': 'Type II',
+                'CLO 17': 'Type II',
+                'CLO 20': 'Type II',
+                'CLO 8R': 'Type II',
+                'CLO 14': 'Type I',
+                'CLO 13': 'Type I',
+                'CLO 15': 'Type I',
+                'CLO 10': 'Type I',
+                'CLO 11': 'Type I',
+                'CLO 12': 'Type I',
+                'CLO 7': 'Type I',
+                'CLO 6': 'Type I',
+                'CLO 5': 'Type I',
+                'EUR 1': 'Type II',
+                'EUR 2': 'Type I',
+                'EUR 3': 'Type II',
+                'EUR 4': 'Type II'}
+    
+    return clo_types[col]
+#################################################################################
+def get_SPDR_Table(filepath):
+    filepath = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/US CLO Triggers as of 6.24.21.xlsx'
+    SPDR_Table = pd.read_excel(filepath,sheet_name = "SPDR")
+    SPDR_Table.set_index('Tenor', inplace=True)
+    return SPDR_Table
+#################################################################################
+def SPDR(df,SPDR_Table):
+    
+    df['Loan Life']  = ((df['Maturity Date'] - pd.Timestamp.today()).dt.days/365)
+    
+    badrates = pd.Series(['CC','NR'])
+    
+    def lookup_spdr(rating,loanlife):
+        # this needs to skip any sub CCC- loans
+        if rating!=rating:  # checking string is nan trick
+            spdr = np.nan
+        elif badrates.str.match(rating).any():
+            spdr = np.nan
+        else:
+            tenors = (SPDR_Table.columns == loanlife//1) | (SPDR_Table.columns == loanlife//1 +1)
+            spdr = SPDR_Table.loc[rating,tenors].values[0]+ loanlife%1 * \
+                (SPDR_Table.loc[rating,tenors].values[1]-SPDR_Table.loc[rating,tenors].values[0])
+        return df
+        
+    df['S&P Default Rating'] = df[['S&P Facility Rating','Loan Life']].apply(lambda x: lookup_spdr(x[0],x[1]),axis=1)
+    
+    return df
+#################################################################################
 def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
-    #C0 = 0.185893082941552
-    #C1 = 3.70021989750327
-    #C2 = 0.881097473356921
-    C0=0.109706
-    C1=4.140929
-    C2=1.064031
+
+    C0=SP_CDO_Coefs(col)[0]
+    C1=SP_CDO_Coefs(col)[1]
+    C2=SP_CDO_Coefs(col)[2]
     
     # 'S&P Issuer Rating'
     #clo_df.drop(columns=['S&P CLO Specified Assets'],inplace=True)
@@ -484,7 +566,6 @@ def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
     # Target Par Amount
     # this is a quick estimate until we have a default parameter set for each
     OP = (round((clo_df[col].sum()/1e8))*100)*1e6
-
     
     # Agg Principal Balance (excl < CCC-)
     NP = clo_df['S&P CLO Specified Assets'].sum()
@@ -500,6 +581,7 @@ def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
     # Weighted Average Rating Factor
     # uses specified assets
     SPWARF = weighted_average(clo_df,cols=['S&P CLO Specified Assets','S&P Global Ratings Factor'])
+    
     
     clo_df['Absolute Deviation'] = abs(clo_df['S&P Global Ratings Factor']-SPWARF)
     # Default Rate Dispersion
@@ -534,10 +616,17 @@ def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
     AdjBDR = BDR * (OP/NP) - (NP - OP)/(NP *(1-SPWARR))
     
     # S&P CDO Monitor SDR
-    # 0.247621 + (SPWARF/9162.65) – (DRD/16757.2) – (ODM/7677.8) – (IDM/2177.56) – 
-    # (RDM/34.0948) + (WAL/27.3896)
-    SDR = 0.247621 + (SPWARF/9162.65) - (DRD/16757.2) - (ODM/7677.8) - (IDM/2177.56) - (RDM/34.0948) \
-        + (WAL/27.3896)
+    if SP_CDO_Type(col) == 'Type II':
+        SDR = 0.247621 + (SPWARF/9162.65) - (DRD/16757.2) - (ODM/7677.8) - (IDM/2177.56) - (RDM/34.0948) \
+            + (WAL/27.3896)
+    else:
+        SPDR = 
+        
+        # S&P Expected Portfolio Default Rate
+        EPDR = (model_df['S&P CLO Specified Assets']*SPDR).sum()/model_df['S&P CLO Specified Assets'].sum()
+
+        SDR = 0.329915 + (1.210322 * EPDR) – (0.586627 * DRD) + (2.538684 /ODM) + (0.216729 / IDM) + \
+            (0.0575539 / RDM) – (0.0136662 * WAL)
     
     print('Pass' if AdjBDR >= SDR else 'Fail')
     
@@ -887,7 +976,7 @@ def percentage_CCC(model_df,weight_col='CLO 20'):
     return perC.values[0]
 
 #################################################################################
-def Overcollateralization_Stats(df,col,note_dict,format_output=True):
+def Overcollateralization_Stats(df,col,note_dict,format_output=False):
     PrinBal = df[col].sum()
     AB_Denom = note_dict['Class A-1 Notes']+note_dict['Class A-2 Notes']+note_dict['Class B-1 Notes']+\
                 note_dict['Class B-2 Notes']
