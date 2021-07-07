@@ -10,11 +10,11 @@ libor = 0.0020
 dict_2020_20 = {'Class A-1 Notes':240e6,'Class A-2 Notes':16e6,'Class B-1 Notes':39e6,'Class B-2 Notes':9e6,
                'Class C Notes':24e6,'Class D-1 Notes':16e6,'Class D-2 Notes':8e6,'Class E Notes':12e6}
 
-clo_list = ['CLO 4', 'CLO 5', 'CLO 6',
-       'CLO 7', 'CLO 8R', 'CLO 9', 'CLO 10', 'CLO 11',
+clo_list = ['CLO 5', 'CLO 6',
+       'CLO 7', 'CLO 8R', 'CLO 10', 'CLO 11',
        'CLO 12', 'CLO 13', 'CLO 14', 'CLO 15',
        'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19',
-       'CLO 20', 'CLO 21']  # 'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4'
+       'CLO 20', 'CLO 21']  #['CLO 4', 'CLO 9',  'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4'
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/CLO Reports/'
 file = 'Master Position Report.xlsx'
@@ -31,6 +31,8 @@ qstats_list = ['Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
     'Maximum Moody\'s Rating Factor Test',
     'Minimum Weighted Average Moody’s Recovery Rate Test',
     'Weighted Average Life']
+
+
 
 coverage_stats = ['Interest Coverage Test - Class A',
        'Interest Coverage Test - Class B',
@@ -155,9 +157,12 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         'Percent Caa & lower',
         'Percent CCC & lower',
         'Percent 2nd Lien',
+        'End of Reinvestment Period',
+        'Prior Determination Date',
+        'Next Determination Date',                                       
     #    'Percent Sub80',
     #    'Percent Sub90',
-        'Percent CovLite',
+    #    'Percent CovLite',
     #    'Pot Par B/L Sale',
     #    'Pot Par B/L Buy',
     #    'Pot Par B/L Total',
@@ -213,11 +218,15 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     
     Port_stats_df.loc['Percent 2nd Lien',weight_col] = percentage_SecondLien(model_df, weight_col)*100
     
+    Port_stats_df.loc['End of Reinvestment Period',weight_col] = reinvestment_end.loc[weight_col,'End_of_Reinvestment_Period']
+    Port_stats_df.loc['Prior Determination Date',weight_col] = prior_determination_date(ddates,weight_col)
+    Port_stats_df.loc['Next Determination Date',weight_col] = next_determination_date(ddates,weight_col)
+    
     #Port_stats_df.loc['Percent Sub80',weight_col] = percentage_SubEighty(model_df, weight_col)*100
     
     #Port_stats_df.loc['Percent Sub90',weight_col] = percentage_SubNinety(model_df, weight_col)*100
     
-    Port_stats_df.loc['Percent CovLite',weight_col] = percentage_CovLite(model_df, weight_col)*100
+    #Port_stats_df.loc['Percent CovLite',weight_col] = percentage_CovLite(model_df, weight_col)*100
     Port_stats_df.loc['Total Portfolio Par (excl. Defaults)',weight_col] = model_df[weight_col].sum()
 
     
@@ -253,8 +262,8 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         #    Port_stats_df.loc['Percent Sub80'].apply('{:.1f}%'.format)
         #Port_stats_df.loc['Percent Sub90'] = \
         #    Port_stats_df.loc['Percent Sub90'].apply('{:.1f}%'.format)
-        Port_stats_df.loc['Percent CovLite'] = \
-            Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
+        #Port_stats_df.loc['Percent CovLite'] = \
+        #    Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
         Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
             Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
         
@@ -346,6 +355,48 @@ def get_master_position_report(filepath):
     master_df = DataLabelMap(master_df)
     master_df = add_derived_features(master_df,libor=0.0020)
     return master_df
+#################################################################################
+def get_reinvestment_end(pathT):
+    #pathT = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/'
+    reinvestment_end = pd.read_csv(pathT+'End_of_Reinvestment_Period.txt')
+    reinvestment_end['End_of_Reinvestment_Period'] = pd.to_datetime(reinvestment_end['End_of_Reinvestment_Period'])
+    return reinvestment_end
+#################################################################################
+def get_determination_dates(path):
+    determination_dates = pd.read_excel(path+'OCP CLO Determination Dates.xlsx',sheet_name='Determination Dates')
+    fund_name_map = {'OCP 2013-4':'CLO 4', 'OCP 2014-5':'CLO 5', 'OCP 2014-6':'CLO 6', 'OCP 2014-7':'CLO 7',
+       'OCP 2020-8R':'CLO 8R', 'OCP 2015-9':'CLO 9', 'OCP 2015-10':'CLO 10',
+       'OCP 2016-11':'CLO 11', 'OCP 2016-12':'CLO 12', 'OCP 2017-13':'CLO 13', 'OCP 2017-14':'CLO 14',
+       'OCP 2018-15':'CLO 15', 'OCP 2019-16':'CLO 16', 'OCP 2019-17':'CLO 17', 'OCP 2020-18':'CLO 18',
+       'OCP 2020-19':'CLO 19', 'OCP 2020-20':'CLO 20', 'Euro CLO1':'EUR 1', 'Euro CLO2':'EUR 2',
+       'Euro CLO3':'EUR 3', 'Euro CLO4':'EUR 4'}
+    determination_dates['Fund'] = determination_dates['Fund'].map(fund_name_map)
+    return determination_dates
+#################################################################################
+def next_determination_date(ddates,clo_idx):
+    """ Finds the closest next Determination Date for a given CLO """
+    dd = ddates.loc[ddates['Fund']==clo_idx,'Determination Date']
+    next_ddate = min(dd.loc[dd>pd.Timestamp.today()], key=lambda s: (s-pd.Timestamp.today()))
+    return next_ddate
+#################################################################################
+def prior_determination_date(ddates,clo_idx):
+    """ Finds the closest previous Determination Date for a given CLO """
+    dd = ddates.loc[ddates['Fund']==clo_idx,'Determination Date']
+    prior_ddate = max(dd.loc[dd<pd.Timestamp.today()], key=lambda s: (s-pd.Timestamp.today()))
+    return prior_ddate
+#################################################################################
+def get_date_range(day_of_month, year=pd.Timestamp.now().year):
+    """
+    day_of_month: integer for the calendar day of the month
+    year: default this year
+    """
+    return (
+            pd.date_range(start=pd.Timestamp(year=year - 1, month=12, day=31),
+                          periods=12, freq='MS') +
+            pd.Timedelta(days=day_of_month) -
+            pd.tseries.offsets.BDay()
+    )
+
 #################################################################################
 def diversity_score(model_df, weight_col='Par_no_default'):
     """
@@ -521,28 +572,30 @@ def SP_CDO_Type(col='CLO 20'):
     return clo_types[col]
 #################################################################################
 def get_SPDR_Table(filepath):
-    filepath = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/US CLO Triggers as of 6.24.21.xlsx'
+    #filepath = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/US CLO Triggers as of 6.24.21.xlsx'
     SPDR_Table = pd.read_excel(filepath,sheet_name = "SPDR")
     SPDR_Table.set_index('Tenor', inplace=True)
-    return SPDR_Table
+    return SPDR_Table.T
 #################################################################################
-def SPDR(df,SPDR_Table):
+def SP_DR(df):
+    filepath = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/US CLO Triggers as of 6.24.21.xlsx'
+    SPDR_Table = get_SPDR_Table(filepath)
     
     df['Loan Life']  = ((df['Maturity Date'] - pd.Timestamp.today()).dt.days/365)
     
-    badrates = pd.Series(['CC','NR'])
+    badrates = pd.Series(['CC+','CC','CC-','D','NR'])
     
     def lookup_spdr(rating,loanlife):
         # this needs to skip any sub CCC- loans
         if rating!=rating:  # checking string is nan trick
             spdr = np.nan
-        elif badrates.str.match(rating).any():
+        elif badrates.str.match(rating).any():  # exclude sub CCC- rated
             spdr = np.nan
         else:
             tenors = (SPDR_Table.columns == loanlife//1) | (SPDR_Table.columns == loanlife//1 +1)
             spdr = SPDR_Table.loc[rating,tenors].values[0]+ loanlife%1 * \
                 (SPDR_Table.loc[rating,tenors].values[1]-SPDR_Table.loc[rating,tenors].values[0])
-        return df
+        return spdr
         
     df['S&P Default Rating'] = df[['S&P Facility Rating','Loan Life']].apply(lambda x: lookup_spdr(x[0],x[1]),axis=1)
     
@@ -620,13 +673,14 @@ def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
         SDR = 0.247621 + (SPWARF/9162.65) - (DRD/16757.2) - (ODM/7677.8) - (IDM/2177.56) - (RDM/34.0948) \
             + (WAL/27.3896)
     else:
-        SPDR = 
+        clo_df = SP_DR(clo_df)
+        SPDR = clo_df['S&P Default Rating']
         
         # S&P Expected Portfolio Default Rate
-        EPDR = (model_df['S&P CLO Specified Assets']*SPDR).sum()/model_df['S&P CLO Specified Assets'].sum()
+        EPDR = (clo_df['S&P CLO Specified Assets']*SPDR).sum()/clo_df['S&P CLO Specified Assets'].sum()
 
-        SDR = 0.329915 + (1.210322 * EPDR) – (0.586627 * DRD) + (2.538684 /ODM) + (0.216729 / IDM) + \
-            (0.0575539 / RDM) – (0.0136662 * WAL)
+        SDR = 0.329915 + (1.210322 * EPDR) - (0.586627 * DRD) + (2.538684 /ODM) + (0.216729 / IDM) + \
+            (0.0575539 / RDM) - (0.0136662 * WAL)
     
     print('Pass' if AdjBDR >= SDR else 'Fail')
     
@@ -833,15 +887,6 @@ def Specified_Assets(df,col):
     df.loc[mask,'S&P CLO Specified Assets'] = 0   # what about .isna()?
     return df
 #################################################################################
-def Weighted_Average_Life(clo_df,col):
-   
-    clo_df['Average Life']  = ((clo_df['Maturity Date'] - pd.Timestamp.today()).dt.days/365).round(2)
-    clo_df = Specified_Assets(clo_df,col)
-    
-    WAL_stat = weighted_average(clo_df,cols=['S&P CLO Specified Assets','Average Life'])
-    
-    return WAL_stat
-#################################################################################
 def Weighted_Average_Spread(clo_df,col,libor=.002):
     """
     Per the Virtus Compliance Reports, the Indenture and the Cheat-sheet-Spreadsheet
@@ -912,12 +957,21 @@ def Excess_Weighted_Average_FloatSpread(clo_df,col,minFS):
     
     return EWAFS
 #################################################################################
+def Weighted_Average_Life(clo_df,col):
+   
+    clo_df['Average Life']  = ((clo_df['Maturity Date'] - pd.Timestamp.today()).dt.days/365).round(2)
+    clo_df = Specified_Assets(clo_df,col)
+    
+    WAL_stat = weighted_average(clo_df,cols=['S&P CLO Specified Assets','Average Life'])
+    
+    return WAL_stat
+#################################################################################
 def Weighted_Average_Life_Test(clo_df,col):
     
     # This is CLO Specific!  It also is the Trigger, not the mapping
     # so this function was barking up the wrong tree.  I.e. you look up
     # the trigger in this map to compare with your test stat
-    WAL_value = {'1/9/2021':9.00, '4/9/2021':8.67,'7/9/2021':8.42,'10/9/2021':8.17 ,
+    WAL_value_20 = {'1/9/2021':9.00, '4/9/2021':8.67,'7/9/2021':8.42,'10/9/2021':8.17 ,
         '1/9/2022':7.92,'4/9/2022':7.67,'7/9/2022':7.42 ,'10/9/2022':7.17 ,'1/9/2023':6.92 ,
         '4/9/2023':6.67 ,'7/9/2023':6.42 ,'10/9/2023':6.17 ,'1/9/2024':5.92 ,'4/9/2024':5.67 ,
         '7/9/2024':5.42 ,'10/9/2024':5.17 ,'1/9/2025':4.92 ,'4/9/2025':4.67 ,'7/9/2025':4.42 ,
@@ -928,7 +982,6 @@ def Weighted_Average_Life_Test(clo_df,col):
         '10/9/2030':0.00 ,'1/9/2031':0.00 ,'4/9/2031':0.00 ,'7/9/2031':0.00 ,'10/9/2031':0.00 ,
         '1/9/2032':0.00 ,'4/9/2032':0.00 ,'7/9/2032':0.00 ,'10/9/2032':0.00 ,'1/9/2033':0.00 ,
         '4/9/2033':0.00 ,'7/9/2033':0.00 ,'10/9/2033':0.0}
-    
     
     
     WAL_val = pd.DataFrame.from_dict(WAL_value,orient='index',columns=['Value'])
@@ -959,12 +1012,17 @@ def percentage_SecondLien(model_df,weight_col='Par_no_default'):
 
 #################################################################################
 def percentage_C(model_df,weight_col='Par_no_default'):  
+    """ old version, replaced with the specific ones below """
     perC = model_df.loc[model_df['Adjusted Moodys Rating'].str.match('C'),[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 #################################################################################
 def percentage_Caa(model_df,weight_col='CLO 20'):  
+    rate_col = 'MDPR'
+    mask = (model_df[rate_col]=='Caa2') |  (model_df[rate_col]=='Caa3') |  \
+           (model_df[rate_col]=='Caa') | (model_df[rate_col]) =='C' | \
+           (model_df[rate_col]=='NR') #|  (clo_df['S&P Issuer Rating']=='D')
     
-    perC = model_df.loc[model_df['MDPR'].str.match('C'),[weight_col]].sum()/model_df[[weight_col]].sum()
+    perC = model_df.loc[mask,[weight_col]].sum()/model_df[[weight_col]].sum()
     return perC.values[0]
 #################################################################################
 def percentage_CCC(model_df,weight_col='CLO 20'):  
