@@ -1,9 +1,16 @@
 import numpy as np  # probably don't need to load
 import pandas as pd
+from pandas.tseries.holiday import USFederalHolidayCalendar
+from pandas.tseries.offsets import CustomBusinessDay
+
+
+
 
 #################################################################################
 ## hard-coded variables for now, maps and such
 #################################################################################
+
+bday_us = CustomBusinessDay(calendar=USFederalHolidayCalendar())
 
 libor = 0.0020
 
@@ -14,7 +21,7 @@ clo_list = ['CLO 5', 'CLO 6',
        'CLO 7', 'CLO 8R', 'CLO 10', 'CLO 11',
        'CLO 12', 'CLO 13', 'CLO 14', 'CLO 15',
        'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19',
-       'CLO 20', 'CLO 21']  #['CLO 4', 'CLO 9',  'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4'
+       'CLO 20']  #['CLO 4', 'CLO 9',  'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4', 'CLO 21'
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/CLO Reports/'
 file = 'Master Position Report.xlsx'
@@ -98,6 +105,10 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
        'Percent Caa & lower':'Moody\'s Rating <= Caa1', 
        'Percent CCC & lower':'S&P Rating <= CCC+', 
        'Percent 2nd Lien':'Percent 2nd Lien',
+       'End of Reinvestment Period':'End of Reinvestment Period',
+       'Prior Determination Date':'Prior Determination Date',
+       'Next Determination Date':'Next Determination Date', 
+       'Next Payment Date':'Next Payment Date',
        'Total Portfolio Par (excl. Defaults)':'Total Portfolio Par (excl. Defaults)',
        'Class A/B Overcollateralization Ratio':'Overcollateralization Ratio Test - Class A/B',
        'Class C Overcollateralization Ratio':'Overcollateralization Ratio Test - Class C',
@@ -114,6 +125,34 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
        'Adjusted Break-Even Default Rate (Adj BDR)':'Adjusted Break-Even Default Rate (Adj BDR)',
        'Scenario Default Rate (SDR)':'Scenario Default Rate (SDR)'}
 
+trigger_direction_map = {'Minimum Floating Spread Test':'>=',
+    'Minimum Weighted Average S&P Recovery Rate Test - Class A-1':'>=',
+       'Minimum Floating Spread Test':'>=', 'Minimum Weighted Average Coupon Test':'>=',
+       'Moody\'s Diversity Test':'>=', 'Max Moodys Rating Factor Test (NEW WARF)':'<=',
+        'Maximum Moody\'s Rating Factor Test':'<=',
+       'Minimum Weighted Average Moody’s Recovery Rate Test':'>=',
+       'Weighted Average Life':'<=', 
+        'Percent 2nd Lien':'<=',
+       'End of Reinvestment Period':'=', 'Prior Determination Date':'=',
+       'Next Determination Date':'=', 'Next Payment Date':'=',
+       'Total Portfolio Par (excl. Defaults)':'=',                 
+        'Interest Coverage Test - Class A':'>=',
+       'Interest Coverage Test - Class B':'>=',
+       'Interest Coverage Test - Class A/B':'>=',
+       'Interest Coverage Test - Class C':'>=', 'Interest Coverage Test - Class D':'>=',
+       'Interest Diversion Test':'>=', 'Overcollateralization Ratio Test - Class A':'>=',
+       'Overcollateralization Ratio Test - Class B':'>=',
+       'Overcollateralization Ratio Test - Class A/B':'>=',
+       'Overcollateralization Ratio Test - Class C':'>=',
+       'Overcollateralization Ratio Test - Class D':'>=',
+       'Overcollateralization Ratio Test - Class E':'>=',
+       'Reinvestment Overcollateralization Test':'>=',
+       'Overcollateralization Ratio Test - Event of Default':'>=', 'Cov-Lite Loans':'<=',
+       'Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+':'<=',
+       'Moody\s Rating <= Caa1':'<=', 'S&P Rating <= CCC+':'<=','Cov-Lite Loans':'<='}
+
+stats_list = qstats_list + coverage_stats + con_stats
+#next_determination_date(determination_dates,'CLO 4')
 
 #################################################################################
 ## These functions have been modified vis a vis CLOUtils due to differences in
@@ -159,7 +198,8 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         'Percent 2nd Lien',
         'End of Reinvestment Period',
         'Prior Determination Date',
-        'Next Determination Date',                                       
+        'Next Determination Date',
+        'Next Payment Date',
     #    'Percent Sub80',
     #    'Percent Sub90',
     #    'Percent CovLite',
@@ -178,13 +218,13 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     # model_df is created.  Need to find solution
     
     Port_stats_df.loc['Min Floating Spread Test - no Libor Floors',weight_col] = \
-        Weighted_Average_Spread(model_df,weight_col,libor=.002)*100
+        Weighted_Average_Spread(model_df,weight_col,libor=.002)
     
     Port_stats_df.loc['Min Floating Spread Test - With Libor Floors',weight_col] = \
-        weighted_average(model_df,cols=[weight_col,'All In Rate'])*100
+        weighted_average(model_df,cols=[weight_col,'All In Rate'])
 
     Port_stats_df.loc['Minimum Weighted Average Coupon Test',weight_col] = \
-        Weighted_Average_Coupon(model_df,weight_col)*100
+        Weighted_Average_Coupon(model_df,weight_col)
 
     Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)',weight_col] = \
         weighted_average(model_df,cols=[weight_col,'Adj. WARF NEW'])
@@ -197,10 +237,10 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     
         
     Port_stats_df.loc['Min Moodys Recovery Rate Test',weight_col] = \
-        weighted_average(model_df,cols=[weight_col,'Moodys Recovery Rate'])*100    
+        weighted_average(model_df,cols=[weight_col,'Moodys Recovery Rate'])    
     
     Port_stats_df.loc['Min S&P Recovery Rate Class A-1a',weight_col] = \
-            weighted_average(model_df,cols=[weight_col,'S&P Recovery Rate (AAA)'])*100
+            weighted_average(model_df,cols=[weight_col,'S&P Recovery Rate (AAA)'])
         #weighted_average(model_df,cols=[weight_col,'S&P Recovery Rate (AAA)'])*100
     
     Port_stats_df.loc['Moodys Diversity Test',weight_col] = diversity_score(model_df, weight_col)
@@ -213,14 +253,15 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     Port_stats_df.loc['Weighted Average Life Test',weight_col] = \
             Weighted_Average_Life(model_df,weight_col)
     
-    Port_stats_df.loc['Percent Caa & lower',weight_col] = percentage_Caa(model_df, weight_col)*100
-    Port_stats_df.loc['Percent CCC & lower',weight_col] = percentage_CCC(model_df, weight_col)*100
+    Port_stats_df.loc['Percent Caa & lower',weight_col] = percentage_Caa(model_df, weight_col)
+    Port_stats_df.loc['Percent CCC & lower',weight_col] = percentage_CCC(model_df, weight_col)
     
-    Port_stats_df.loc['Percent 2nd Lien',weight_col] = percentage_SecondLien(model_df, weight_col)*100
+    Port_stats_df.loc['Percent 2nd Lien',weight_col] = percentage_SecondLien(model_df, weight_col)
     
     Port_stats_df.loc['End of Reinvestment Period',weight_col] = reinvestment_end.loc[weight_col,'End_of_Reinvestment_Period']
     Port_stats_df.loc['Prior Determination Date',weight_col] = prior_determination_date(ddates,weight_col)
     Port_stats_df.loc['Next Determination Date',weight_col] = next_determination_date(ddates,weight_col)
+    Port_stats_df.loc['Next Payment Date',weight_col] = next_payment_date(ddates,weight_col)
     
     #Port_stats_df.loc['Percent Sub80',weight_col] = percentage_SubEighty(model_df, weight_col)*100
     
@@ -232,19 +273,19 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     
     if format_output:
         Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'] = \
-            Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'].apply('{:.2f}%'.format)
+            Port_stats_df.loc['Min Floating Spread Test - no Libor Floors'].apply('{:.2f}%'.format)*100
         Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'] = \
-            Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'].apply('{:.2f}%'.format)
+            Port_stats_df.loc['Min Floating Spread Test - With Libor Floors'].apply('{:.2f}%'.format)*100
         Port_stats_df.loc['Minimum Weighted Average Coupon Test'] = \
-            Port_stats_df.loc['Minimum Weighted Average Coupon Test'].apply('{:.2f}%'.format)
+            Port_stats_df.loc['Minimum Weighted Average Coupon Test'].apply('{:.2f}%'.format)*100
         Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'] = \
             Port_stats_df.loc['Max Moodys Rating Factor Test (NEW WARF)'].apply('{:.0f}'.format)
         Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'] = \
             Port_stats_df.loc['Max Moodys Rating Factor Test (Orig WARF)'].apply('{:.0f}'.format)
         Port_stats_df.loc['Min Moodys Recovery Rate Test'] = \
-            Port_stats_df.loc['Min Moodys Recovery Rate Test'].apply('{:.1f}%'.format)
+            Port_stats_df.loc['Min Moodys Recovery Rate Test'].apply('{:.1f}%'.format)*100
         Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'] = \
-            Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'].apply('{:.1f}%'.format)
+            Port_stats_df.loc['Min S&P Recovery Rate Class A-1a'].apply('{:.1f}%'.format)*100
         Port_stats_df.loc['Moodys Diversity Test'] = \
             Port_stats_df.loc['Moodys Diversity Test'].apply('{:.0f}'.format)
         #Port_stats_df.loc['WAP'] = \
@@ -253,11 +294,11 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         Port_stats_df.loc['Weighted Average Life Test'] = \
             Port_stats_df.loc['Weighted Average Life Test'].apply('{:.2f}'.format)
         Port_stats_df.loc['Percent Caa & lower'] = \
-            Port_stats_df.loc['Percent Caa & lower'].apply('{:.1f}%'.format)
+            Port_stats_df.loc['Percent Caa & lower'].apply('{:.1f}%'.format)*100
         Port_stats_df.loc['Percent CCC & lower'] = \
-            Port_stats_df.loc['Percent CCC & lower'].apply('{:.1f}%'.format)
+            Port_stats_df.loc['Percent CCC & lower'].apply('{:.1f}%'.format)*100
         Port_stats_df.loc['Percent 2nd Lien'] = \
-            Port_stats_df.loc['Percent 2nd Lien'].apply('{:.1f}%'.format)
+            Port_stats_df.loc['Percent 2nd Lien'].apply('{:.1f}%'.format)*100
         #Port_stats_df.loc['Percent Sub80'] = \
         #    Port_stats_df.loc['Percent Sub80'].apply('{:.1f}%'.format)
         #Port_stats_df.loc['Percent Sub90'] = \
@@ -385,6 +426,19 @@ def prior_determination_date(ddates,clo_idx):
     prior_ddate = max(dd.loc[dd<pd.Timestamp.today()], key=lambda s: (s-pd.Timestamp.today()))
     return prior_ddate
 #################################################################################
+def next_payment_date(ddates,clo_idx):
+    """ Finds the closest next Determination Date for a given CLO """
+    dd = ddates.loc[ddates['Fund']==clo_idx,'Payment Date'].dropna()
+    next_date = min(dd.loc[dd>pd.Timestamp.today()], key=lambda s: (s-pd.Timestamp.today()))
+    return next_date
+#################################################################################
+def get_all_dates(path,pathT):
+    reinvestment_end = get_reinvestment_end(pathT)
+    ddates = get_determination_dates(path)
+    return reinvestment_end, ddates
+
+reinvestment_end, ddates = get_all_dates(path,pathT)
+#################################################################################
 def get_date_range(day_of_month, year=pd.Timestamp.now().year):
     """
     day_of_month: integer for the calendar day of the month
@@ -396,7 +450,13 @@ def get_date_range(day_of_month, year=pd.Timestamp.now().year):
             pd.Timedelta(days=day_of_month) -
             pd.tseries.offsets.BDay()
     )
-
+def get_date_range_with_holidays(day_of_month, year=pd.Timestamp.now().year):
+    return (
+            pd.date_range(start=pd.Timestamp(year=year - 1, month=12, day=31),
+                          periods=12, freq='MS') +
+            pd.Timedelta(days=day_of_month) -
+            bday_us
+    )
 #################################################################################
 def diversity_score(model_df, weight_col='Par_no_default'):
     """
@@ -535,6 +595,9 @@ def SP_CDO_Coefs(col='CLO 20'):
                 'CLO 7': [0.017043,4.541246,1.067143],
                 'CLO 6': [0.05869,4.267761,1.099711],
                 'CLO 5': [0.060439,4.275955,1.14419],
+                'CLO 4': [np.nan,np.nan,np.nan],
+                'CLO 9': [np.nan,np.nan,np.nan],
+                'CLO 21': [np.nan,np.nan,np.nan],               
                 'EUR 1': [0.185893082941552,3.70021989750327,0.881097473356921],
                 'EUR 2': [0.206296268943602,4.05917015316102,0.947621203737026],
                 'EUR 3': [0.191101158723369,3.39938112043418,0.952667210171681],
@@ -567,7 +630,10 @@ def SP_CDO_Type(col='CLO 20'):
                 'EUR 1': 'Type II',
                 'EUR 2': 'Type I',
                 'EUR 3': 'Type II',
-                'EUR 4': 'Type II'}
+                'EUR 4': 'Type II',
+                'CLO 4': 'Type I',
+                'CLO 9': 'Type I',
+                'CLO 21': 'Type II'}
     
     return clo_types[col]
 #################################################################################
@@ -1019,7 +1085,7 @@ def percentage_C(model_df,weight_col='Par_no_default'):
 def percentage_Caa(model_df,weight_col='CLO 20'):  
     rate_col = 'MDPR'
     mask = (model_df[rate_col]=='Caa2') |  (model_df[rate_col]=='Caa3') |  \
-           (model_df[rate_col]=='Caa') | (model_df[rate_col]) =='C' | \
+           (model_df[rate_col]=='Caa') | (model_df[rate_col] =='C') | \
            (model_df[rate_col]=='NR') #|  (clo_df['S&P Issuer Rating']=='D')
     
     perC = model_df.loc[mask,[weight_col]].sum()/model_df[[weight_col]].sum()
@@ -1108,6 +1174,18 @@ def all_stats_all_clos(model_df, cols, clo_dict, format_output=False):
     
     return cstats
 #################################################################################
+def get_triggers(filepathT):
+    triggers = pd.read_excel(filepathT)
+    ## normalize some of the test names
+    triggers.loc[triggers['TestType']=='Coverage Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Coverage Test','Title'].map(coverage_map)
+    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].str.lstrip("(0123456789abc)/ ")
+    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
+        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].map(con_stats_map)
+    return triggers
+trigger_df = get_triggers(filepathT)
+#################################################################################
 def build_trigger_tables(trigger_df,clo_list,stats_list):
     trigger_table = pd.DataFrame(np.nan,index=stats_list,columns = clo_list)
     for clo in clo_list:
@@ -1123,17 +1201,6 @@ def build_trigger_tables(trigger_df,clo_list,stats_list):
     return trigger_table
 #################################################################################
 #def master_test_stats(master_df,weight_col='CLO 2020-20',master_dict):
-#################################################################################
-def get_triggers(filepathT):
-    triggers = pd.read_excel(filepathT)
-    ## normalize some of the test names
-    triggers.loc[triggers['TestType']=='Coverage Test','Title'] = \
-        triggers.loc[triggers['TestType']=='Coverage Test','Title'].map(coverage_map)
-    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
-        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].str.lstrip("(0123456789abc)/ ")
-    triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'] = \
-        triggers.loc[triggers['TestType']=='Concentration Limitation Test','Title'].map(con_stats_map)
-    return triggers
 
 #################################################################################
 def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
@@ -1144,17 +1211,22 @@ def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
     
     ## Triggers
     triggers = get_triggers(filepathT)
-    clo_list = triggers['CLOName'].unique()
-    clo_list = sorted(clo_list)
-    clo_list = clo_list[11:]+clo_list[0:11]
+    #clo_list = triggers['CLOName'].unique()
+    #clo_list = sorted(clo_list)
+    #clo_list = clo_list[11:]+clo_list[0:11]
+    print(triggers.info())
     
     stats_list = qstats_list + coverage_stats + con_stats # all the triggers
     
-    trigger_table = build_trigger_tables(triggers,clo_list,stats_list)
+    trigger_table = build_trigger_tables(triggers,cols,stats_list)
     
     master_test_df = pd.concat([all_df,trigger_table],axis=1,keys=['Result','Trigger']).swaplevel(0,1,axis=1).sort_index(axis=1)
     
     return master_test_df
+#################################################################################
+def write_output(df,filename):
+    df.stack(level=[0]).swaplevel(0, 1).sort_index().to_csv(path+filename+'.csv')
+
 #################################################################################
 ## This was older code before the files changed...delete later if not needed
 #################################################################################
