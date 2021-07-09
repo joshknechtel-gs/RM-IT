@@ -105,10 +105,10 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
        'Percent Caa & lower':'Moody\'s Rating <= Caa1', 
        'Percent CCC & lower':'S&P Rating <= CCC+', 
        'Percent 2nd Lien':'Percent 2nd Lien',
-       'End of Reinvestment Period':'End of Reinvestment Period',
-       'Prior Determination Date':'Prior Determination Date',
-       'Next Determination Date':'Next Determination Date', 
-       'Next Payment Date':'Next Payment Date',
+       #'End of Reinvestment Period':'End of Reinvestment Period',
+       #'Prior Determination Date':'Prior Determination Date',
+       #'Next Determination Date':'Next Determination Date', 
+       #'Next Payment Date':'Next Payment Date',
        'Total Portfolio Par (excl. Defaults)':'Total Portfolio Par (excl. Defaults)',
        'Class A/B Overcollateralization Ratio':'Overcollateralization Ratio Test - Class A/B',
        'Class C Overcollateralization Ratio':'Overcollateralization Ratio Test - Class C',
@@ -125,30 +125,31 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
        'Adjusted Break-Even Default Rate (Adj BDR)':'Adjusted Break-Even Default Rate (Adj BDR)',
        'Scenario Default Rate (SDR)':'Scenario Default Rate (SDR)'}
 
-trigger_direction_map = {'Minimum Floating Spread Test':'>=',
-    'Minimum Weighted Average S&P Recovery Rate Test - Class A-1':'>=',
-       'Minimum Floating Spread Test':'>=', 'Minimum Weighted Average Coupon Test':'>=',
-       'Moody\'s Diversity Test':'>=', 'Max Moodys Rating Factor Test (NEW WARF)':'<=',
-        'Maximum Moody\'s Rating Factor Test':'<=',
-       'Minimum Weighted Average Moody\'s Recovery Rate Test':'>=',
-       'Weighted Average Life':'<=', 
-        'Percent 2nd Lien':'<=',
-       'End of Reinvestment Period':'=', 'Prior Determination Date':'=',
-       'Next Determination Date':'=', 'Next Payment Date':'=',
-       'Total Portfolio Par (excl. Defaults)':'=',                 
-        'Interest Coverage Test - Class A':'>=',
-       'Interest Coverage Test - Class B':'>=',
-       'Interest Coverage Test - Class A/B':'>=',
-       'Interest Coverage Test - Class C':'>=', 'Interest Coverage Test - Class D':'>=',
-       'Interest Diversion Test':'>=', 'Overcollateralization Ratio Test - Class A':'>=',
-       'Overcollateralization Ratio Test - Class B':'>=',
-       'Overcollateralization Ratio Test - Class A/B':'>=',
-       'Overcollateralization Ratio Test - Class C':'>=',
-       'Overcollateralization Ratio Test - Class D':'>=',
-       'Overcollateralization Ratio Test - Class E':'>=',
-       'Reinvestment Overcollateralization Test':'>=',
-       'Overcollateralization Ratio Test - Event of Default':'>=', 'Cov-Lite Loans':'<=',
-       'Moody\s Rating <= Caa1':'<=', 'S&P Rating <= CCC+':'<=','Cov-Lite Loans':'<='}
+trigger_direction_map = {'Minimum Floating Spread Test':1,
+    'Minimum Weighted Average S&P Recovery Rate Test - Class A-1':1,
+       'Minimum Floating Spread Test':1, 'Minimum Weighted Average Coupon Test':1,
+       'Moody\'s Diversity Test':1, 'Max Moodys Rating Factor Test (NEW WARF)':-1,
+       'Maximum Moody\'s Rating Factor Test':-1,
+       'Minimum Weighted Average Moody\'s Recovery Rate Test':1,
+       'Weighted Average Life':-1, 
+       'Percent 2nd Lien':-1,
+       'Interest Coverage Test - Class A':1,
+       'Interest Coverage Test - Class B':1,
+       'Interest Coverage Test - Class A/B':1,
+       'Interest Coverage Test - Class C':1, 'Interest Coverage Test - Class D':1,
+       'Interest Diversion Test':1, 'Overcollateralization Ratio Test - Class A':1,
+       'Overcollateralization Ratio Test - Class B':1,
+       'Overcollateralization Ratio Test - Class A/B':1,
+       'Overcollateralization Ratio Test - Class C':1,
+       'Overcollateralization Ratio Test - Class D':1,
+       'Overcollateralization Ratio Test - Class E':1,
+       'Reinvestment Overcollateralization Test':1,
+       'Overcollateralization Ratio Test - Event of Default':1, 'Cov-Lite Loans':-1,
+       
+       'Moody\'s Rating <= Caa1':-1, 'S&P Rating <= CCC+':-1,'Cov-Lite Loans':-1}
+#'End of Reinvestment Period':'=', 'Prior Determination Date':'=',
+       #'Next Determination Date':'=', 'Next Payment Date':'=',
+       #'Total Portfolio Par (excl. Defaults)':'=', 
 #'Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+':'<=',
 stats_list = qstats_list + coverage_stats + con_stats
 #next_determination_date(determination_dates,'CLO 4')
@@ -1213,6 +1214,7 @@ def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
 #################################################################################
 def one_direction(df,trigger_direction_map):
     df['Direction'] = np.nan
+    #print(df)
     for k in trigger_direction_map:
         df.loc[(slice(None),k),'Direction'] = trigger_direction_map[k]
     return df
@@ -1220,8 +1222,9 @@ def one_direction(df,trigger_direction_map):
 def write_output(df,filename,asdate):
     df = df.stack(level=[0]).swaplevel(0, 1).sort_index()
     df['AsOfDate'] = asdate
+    #df['Direction'] = np.nan
     df = one_direction(df,trigger_direction_map)
-    df.to_csv(path+filename+'.csv')
+    df.to_csv(path+filename+'_'+asdate+'.csv')
 
 #################################################################################
 ## This was older code before the files changed...delete later if not needed
