@@ -21,7 +21,7 @@ clo_list = ['CLO 5', 'CLO 6',
        'CLO 7', 'CLO 8R', 'CLO 10', 'CLO 11',
        'CLO 12', 'CLO 13', 'CLO 14', 'CLO 15',
        'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19',
-       'CLO 20']  #['CLO 4', 'CLO 9',  'Euro 1', 'Euro 2', 'Euro 3', 'Euro 4', 'CLO 21'
+       'CLO 20', 'CLO 21',  'EUR 1', 'EUR 2', 'EUR 3', 'EUR 4']  #['CLO 4', 'CLO 9'
 
 path = 'Z:/Shared/Risk Management and Investment Technology/CLO Optimization/CLO Reports/'
 file = 'Master Position Report.xlsx'
@@ -36,7 +36,7 @@ qstats_list = ['Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
     'Minimum Weighted Average Coupon Test',
     'Moody\'s Diversity Test',
     'Maximum Moody\'s Rating Factor Test',
-    'Minimum Weighted Average Moody’s Recovery Rate Test',
+    'Minimum Weighted Average Moody\'s Recovery Rate Test',
     'Weighted Average Life']
 
 
@@ -98,7 +98,7 @@ all_stats_map = {'Min Floating Spread Test - no Libor Floors':'Minimum Floating 
        'Minimum Weighted Average Coupon Test':'Minimum Weighted Average Coupon Test',
        'Max Moodys Rating Factor Test (NEW WARF)':'Max Moodys Rating Factor Test (NEW WARF)',
        'Max Moodys Rating Factor Test (Orig WARF)':'Maximum Moody\'s Rating Factor Test',
-       'Min Moodys Recovery Rate Test':'Minimum Weighted Average Moody’s Recovery Rate Test', 
+       'Min Moodys Recovery Rate Test':'Minimum Weighted Average Moody\'s Recovery Rate Test', 
        'Min S&P Recovery Rate Class A-1a':'Minimum Weighted Average S&P Recovery Rate Test - Class A-1',
        'Moodys Diversity Test':'Moody\'s Diversity Test', 
        'Weighted Average Life Test':'Weighted Average Life',
@@ -130,7 +130,7 @@ trigger_direction_map = {'Minimum Floating Spread Test':'>=',
        'Minimum Floating Spread Test':'>=', 'Minimum Weighted Average Coupon Test':'>=',
        'Moody\'s Diversity Test':'>=', 'Max Moodys Rating Factor Test (NEW WARF)':'<=',
         'Maximum Moody\'s Rating Factor Test':'<=',
-       'Minimum Weighted Average Moody’s Recovery Rate Test':'>=',
+       'Minimum Weighted Average Moody\'s Recovery Rate Test':'>=',
        'Weighted Average Life':'<=', 
         'Percent 2nd Lien':'<=',
        'End of Reinvestment Period':'=', 'Prior Determination Date':'=',
@@ -148,9 +148,8 @@ trigger_direction_map = {'Minimum Floating Spread Test':'>=',
        'Overcollateralization Ratio Test - Class E':'>=',
        'Reinvestment Overcollateralization Test':'>=',
        'Overcollateralization Ratio Test - Event of Default':'>=', 'Cov-Lite Loans':'<=',
-       'Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+':'<=',
        'Moody\s Rating <= Caa1':'<=', 'S&P Rating <= CCC+':'<=','Cov-Lite Loans':'<='}
-
+#'Moody\'s Default Probability Rating <= Caa1 and/or S&P Rating <= CCC+':'<=',
 stats_list = qstats_list + coverage_stats + con_stats
 #next_determination_date(determination_dates,'CLO 4')
 
@@ -196,17 +195,17 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         'Percent Caa & lower',
         'Percent CCC & lower',
         'Percent 2nd Lien',
-        'End of Reinvestment Period',
-        'Prior Determination Date',
-        'Next Determination Date',
-        'Next Payment Date',
+    #   'End of Reinvestment Period',
+    #    'Prior Determination Date',
+    #    'Next Determination Date',
+    #    'Next Payment Date',
     #    'Percent Sub80',
     #    'Percent Sub90',
     #    'Percent CovLite',
     #    'Pot Par B/L Sale',
     #    'Pot Par B/L Buy',
     #    'Pot Par B/L Total',
-        'Total Portfolio Par (excl. Defaults)',
+    #    'Total Portfolio Par (excl. Defaults)',
     #    'Total Portfolio Par',
      #   'Current Portfolio'
                                               ],columns = [weight_col])
@@ -258,17 +257,17 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
     
     Port_stats_df.loc['Percent 2nd Lien',weight_col] = percentage_SecondLien(model_df, weight_col)
     
-    Port_stats_df.loc['End of Reinvestment Period',weight_col] = reinvestment_end.loc[weight_col,'End_of_Reinvestment_Period']
-    Port_stats_df.loc['Prior Determination Date',weight_col] = prior_determination_date(ddates,weight_col)
-    Port_stats_df.loc['Next Determination Date',weight_col] = next_determination_date(ddates,weight_col)
-    Port_stats_df.loc['Next Payment Date',weight_col] = next_payment_date(ddates,weight_col)
+    #Port_stats_df.loc['End of Reinvestment Period',weight_col] = reinvestment_end.loc[weight_col,'End_of_Reinvestment_Period']
+    #Port_stats_df.loc['Prior Determination Date',weight_col] = prior_determination_date(ddates,weight_col)
+    #Port_stats_df.loc['Next Determination Date',weight_col] = next_determination_date(ddates,weight_col)
+    #Port_stats_df.loc['Next Payment Date',weight_col] = next_payment_date(ddates,weight_col)
     
     #Port_stats_df.loc['Percent Sub80',weight_col] = percentage_SubEighty(model_df, weight_col)*100
     
     #Port_stats_df.loc['Percent Sub90',weight_col] = percentage_SubNinety(model_df, weight_col)*100
     
     #Port_stats_df.loc['Percent CovLite',weight_col] = percentage_CovLite(model_df, weight_col)*100
-    Port_stats_df.loc['Total Portfolio Par (excl. Defaults)',weight_col] = model_df[weight_col].sum()
+    #Port_stats_df.loc['Total Portfolio Par (excl. Defaults)',weight_col] = model_df[weight_col].sum()
 
     
     if format_output:
@@ -305,31 +304,9 @@ def Port_stats(model_df, weight_col='Par_no_default',format_output=False):
         #    Port_stats_df.loc['Percent Sub90'].apply('{:.1f}%'.format)
         #Port_stats_df.loc['Percent CovLite'] = \
         #    Port_stats_df.loc['Percent CovLite'].apply('{:.1f}%'.format)
-        Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
-            Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
-        
-  
-    #Port_stats_df.loc['Pot Par B/L Sale',weight_col] = model_df['Par_Build_Loss_Sale'].sum()
-    #Port_stats_df.loc['Pot Par B/L Sale'] = \
-    #    Port_stats_df.loc['Pot Par B/L Sale'].apply('{:,.0f}'.format)    
-    
-    #Port_stats_df.loc['Pot Par B/L Buy',weight_col] = model_df['Par_Build_Loss_Buy'].sum()
-    #Port_stats_df.loc['Pot Par B/L Buy'] = \
-    #    Port_stats_df.loc['Pot Par B/L Buy'].apply('{:,.0f}'.format)    
-    
-    #Port_stats_df.loc['Pot Par B/L Total',weight_col] = model_df['Total_Par_Build_Loss'].sum()
-    #Port_stats_df.loc['Pot Par B/L Total'] = \
-    #    Port_stats_df.loc['Pot Par B/L Total'].apply('{:,.0f}'.format)    
+        #Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'] = \
+        #    Port_stats_df.loc['Total Portfolio Par (excl. Defaults)'].apply('{:,.0f}'.format)
 
-    
-#    Port_stats_df.loc['Total Portfolio Par',weight_col] = model_df['Total'].sum()
-#    Port_stats_df.loc['Total Portfolio Par'] = \
-#        Port_stats_df.loc['Total Portfolio Par'].apply('{:,.0f}'.format)
-    
-    # current portfolio is Quantity + Add'l Amount (manual) TBA later
-#    Port_stats_df.loc['Current Portfolio',weight_col] = model_df[['Addtl Purchase Amt','Current Portfolio']].sum(axis=1).sum()
-#    Port_stats_df.loc['Current Portfolio'] = \
-#        Port_stats_df.loc['Current Portfolio'].apply('{:,.0f}'.format)
     
     return Port_stats_df
 
@@ -379,6 +356,10 @@ def DataLabelMap(df):
         'OCP CLO 2020-19, Ltd.': 'CLO 19',
         'OCP CLO 2020-20, Ltd.': 'CLO 20',
         'OCP CLO 2021-21 Ltd.': 'CLO 21',
+        'OCP Euro CLO 2017-1 Designated Activity Company':'EUR 1',
+        'OCP Euro CLO 2017-2 Designated Activity Company':'EUR 2',
+        'OCP Euro CLO 2019-3 DAC':'EUR 3', 
+        'OCP Euro CLO 2020-4':'EUR 4',
         'Current Global Amount Outstanding': 'Current Global Amount Outstanding',
         'Moody\'s Industry': 'Moodys Industry',
         'S&P Industry': 'S&P Industry',
@@ -392,8 +373,15 @@ def get_master_position_report(filepath):
     master_df = pd.read_excel(filepath,header=0)
     master_df = master_df.loc[:,~master_df.columns.str.match("Unnamed")]
     master_df.rename(columns={'LoanX ID':'LXID'},inplace=True)
-    master_df.set_index('LXID', inplace=True)
     master_df = DataLabelMap(master_df)
+    master_df = master_df.loc[master_df[['CLO 4', 'CLO 5', 'CLO 6', 'CLO 7',
+       'CLO 8R', 'CLO 9', 'CLO 10', 'CLO 11', 'CLO 12', 'CLO 13', 'CLO 14',
+       'CLO 15', 'CLO 16', 'CLO 17', 'CLO 18', 'CLO 19', 'CLO 20', 'CLO 21',
+       'EUR 1', 'EUR 2', 'EUR 3', 'EUR 4']].sum(axis=1)>100]
+    master_df = master_df.loc[~master_df[['LXID','CUSIP','ISIN']].isna().all(axis=1)]
+    master_df['LXID'] = master_df[['LXID','CUSIP','ISIN']].\
+        apply(lambda x: x[0] if (x[0]!= 'NaN') else x[2] if (x[2]!= 'NaN') else x[1],axis=1 )
+    master_df.set_index('LXID', inplace=True)
     master_df = add_derived_features(master_df,libor=0.0020)
     return master_df
 #################################################################################
@@ -973,7 +961,8 @@ def Weighted_Average_Spread(clo_df,col,libor=.002):
     """
    
     clo_df = Specified_Assets(clo_df,col)   # This should be a view, not a copy:  sub CCC excluded
-    mask = (clo_df['Asset Type']!='Bond') & (clo_df[col] > 0) & (~clo_df['Spread'].isna())  # Bonds are excluded too
+    #mask = (clo_df['Asset Type']!='Bond') & (clo_df[col] > 0) & (~clo_df['Spread'].isna())  # Bonds are excluded too
+    mask = (clo_df[col] > 0) & (~clo_df['Spread'].isna())  # Bonds are excluded too
     
     WAS_stat = weighted_average(clo_df.loc[mask],cols=['S&P CLO Specified Assets','Effective Spread'])
     
@@ -1003,7 +992,8 @@ def Weighted_Average_Coupon(clo_df,col):
     The Test uses WAC + Excess WAFS (currently ~11%)
     The WAC is probably closer to the WAS
     """
-    mask = (clo_df['Asset Type']=='Bond')
+    #mask = (clo_df['Asset Type']=='Bond')
+    mask = (clo_df[col] > 0) & (clo_df['Spread'].isna())
     WAC_stat = weighted_average(clo_df.loc[mask],[col,'All In Rate'])
     
     return WAC_stat
@@ -1221,8 +1211,17 @@ def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
     
     return master_test_df
 #################################################################################
-def write_output(df,filename):
-    df.stack(level=[0]).swaplevel(0, 1).sort_index().to_csv(path+filename+'.csv')
+def one_direction(df,trigger_direction_map):
+    df['Direction'] = np.nan
+    for k in trigger_direction_map:
+        df.loc[(slice(None),k),'Direction'] = trigger_direction_map[k]
+    return df
+#################################################################################
+def write_output(df,filename,asdate):
+    df = df.stack(level=[0]).swaplevel(0, 1).sort_index()
+    df['AsOfDate'] = asdate
+    df = one_direction(df,trigger_direction_map)
+    df.to_csv(path+filename+'.csv')
 
 #################################################################################
 ## This was older code before the files changed...delete later if not needed
