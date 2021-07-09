@@ -1200,9 +1200,6 @@ def build_trigger_tables(trigger_df,clo_list,stats_list):
     
     return trigger_table
 #################################################################################
-#def master_test_stats(master_df,weight_col='CLO 2020-20',master_dict):
-
-#################################################################################
 def master_test_stats(df, cols=clo_list, clo_dict= dict_2020_20):
 
     ## Get All the stats for all CLOs
