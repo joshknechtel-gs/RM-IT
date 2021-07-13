@@ -637,6 +637,7 @@ def SP_DR(df):
     SPDR_Table = get_SPDR_Table(filepath)
     
     df['Loan Life']  = ((df['Maturity Date'] - pd.Timestamp.today()).dt.days/365)
+    print(df[['Loan Life']].info())
     
     badrates = pd.Series(['CC+','CC','CC-','D','NR'])
     
@@ -647,6 +648,8 @@ def SP_DR(df):
         elif badrates.str.match(rating).any():  # exclude sub CCC- rated
             spdr = np.nan
         else:
+            # pick the tenors on either side of the current loan life (decimal)
+            # then interpolate the ratings in the lookup table
             tenors = (SPDR_Table.columns == loanlife//1) | (SPDR_Table.columns == loanlife//1 +1)
             spdr = SPDR_Table.loc[rating,tenors].values[0]+ loanlife%1 * \
                 (SPDR_Table.loc[rating,tenors].values[1]-SPDR_Table.loc[rating,tenors].values[0])
@@ -700,20 +703,23 @@ def SP_CDO_Monitor_Test(clo_df,col='CLO 20'):
     #print("SPWAS: ", SPWAS, ", SPWARR: ", SPWARR, ', SPWARF: ',SPWARF, ", DRD: ", DRD)
     
     # Obligor Diversity Measure
-    vec = clo_df[[col,'Parent Company']].groupby('Parent Company').sum().values/NP
+    #vec = clo_df[[col,'Parent Company']].groupby('Parent Company').sum().values/NP
+    vec = clo_df[['S&P CLO Specified Assets','Parent Company']].groupby('Parent Company').sum().values/NP
     ODM = 1/vec.T.dot(vec)
     
     # Industry Diversity Measure
-    vec = clo_df[[col,'S&P Industry']].groupby('S&P Industry').sum().values/NP
+    #vec = clo_df[[col,'S&P Industry']].groupby('S&P Industry').sum().values/NP
+    vec = clo_df[['S&P CLO Specified Assets','S&P Industry']].groupby('S&P Industry').sum().values/NP
     IDM = 1/vec.T.dot(vec)
     
     # Regional Diversity Measure
     # Annex D : S&P CDO Evaluator Country Codes, Regions and Recovery Groups
-    vec = clo_df[[col,'Issuer Country']].groupby('Issuer Country').sum().values/NP
+    #vec = clo_df[[col,'Issuer Country']].groupby('Issuer Country').sum().values/NP
+    vec = clo_df[['S&P CLO Specified Assets','Issuer Country']].groupby('Issuer Country').sum().values/NP
     RDM = 1/vec.T.dot(vec)
     
     # Weighted Average Life
-    WAL = Weighted_Average_Life(clo_df,col)
+    WAL = Weighted_Average_Life(clo_df,'S&P CLO Specified Assets')
     
     #print("ODM: ", ODM, ", IDM: ", IDM, ', RDM: ',RDM, ", WAL: ", WAL)
     
@@ -1225,7 +1231,11 @@ def write_output(df,filename,asdate):
     #df['Direction'] = np.nan
     df = one_direction(df,trigger_direction_map)
     df.to_csv(path+filename+'_'+asdate+'.csv')
-
+#################################################################################
+def CLO_stat_script(filepath,ofilename,asdate):
+    clo_df = get_master_position_report(filepath)
+    all_df = master_test_stats(clo_df)
+    write_output(all_df,'CLOComplianceStats',asdate)
 #################################################################################
 ## This was older code before the files changed...delete later if not needed
 #################################################################################
